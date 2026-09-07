@@ -25,6 +25,7 @@
         <div class="preview-wrap">
           <video id="previewVideo" controls></video>
         </div>
+        <div class="file-info" id="fileInfo"></div>
 
         <div class="panel meta-panel">
           <label for="metaPreset">📱 Formato para Meta Ads</label>
@@ -79,12 +80,17 @@
         </div>
 
         <div class="progress-wrap hidden" id="progressWrap">
+          <div class="progress-head">
+            <span id="progressText">Subiendo...</span>
+            <span id="elapsedText">0s</span>
+          </div>
           <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-          <span id="progressText">Procesando... 0%</span>
+          <button id="cancelBtn" class="btn-ghost-cancel">✕ Cancelar</button>
         </div>
 
         <div class="result hidden" id="resultPanel">
           <p>✅ ¡Listo! Tu video quedó procesado y optimizado.</p>
+          <p class="result-meta" id="resultMeta"></p>
           <a id="downloadLink" class="btn-primary" download>⬇️ Descargar video</a>
         </div>
 

@@ -3,6 +3,7 @@ const fileInput = document.getElementById('fileInput');
 const uploadPanel = document.getElementById('uploadPanel');
 const editPanel = document.getElementById('editPanel');
 const previewVideo = document.getElementById('previewVideo');
+const fileInfo = document.getElementById('fileInfo');
 const rotateBtn = document.getElementById('rotateBtn');
 const rotationLabel = document.getElementById('rotationLabel');
 const processBtn = document.getElementById('processBtn');
@@ -10,7 +11,10 @@ const resetBtn = document.getElementById('resetBtn');
 const progressWrap = document.getElementById('progressWrap');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
+const elapsedText = document.getElementById('elapsedText');
+const cancelBtn = document.getElementById('cancelBtn');
 const resultPanel = document.getElementById('resultPanel');
+const resultMeta = document.getElementById('resultMeta');
 const downloadLink = document.getElementById('downloadLink');
 const errorPanel = document.getElementById('errorPanel');
 const audioCodecSel = document.getElementById('audioCodec');
@@ -34,9 +38,20 @@ let currentFile = null;
 let rotation = 0;
 let naturalW = 0;
 let naturalH = 0;
+let pollTimer = null;
+let elapsedTimer = null;
+let elapsedStart = 0;
+let currentJobId = null;
 
 const BOX_MAX_W = 640;
 const BOX_MAX_H = 420;
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb < 1) return `${Math.round(bytes / 1024)} KB`;
+  return `${mb.toFixed(1)} MB`;
+}
 
 function applyPreviewTransform() {
   if (!naturalW || !naturalH) return;
@@ -59,19 +74,30 @@ function applyPreviewTransform() {
   previewVideo.style.transformOrigin = 'center center';
 }
 
+function stopTimers() {
+  if (pollTimer) clearInterval(pollTimer);
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  pollTimer = null;
+  elapsedTimer = null;
+}
+
 function resetAll() {
+  stopTimers();
   currentFile = null;
+  currentJobId = null;
   rotation = 0;
   naturalW = 0;
   naturalH = 0;
   fileInput.value = '';
   previewVideo.src = '';
   previewVideo.style.transform = 'none';
+  fileInfo.textContent = '';
   editPanel.classList.add('hidden');
   uploadPanel.classList.remove('hidden');
   progressWrap.classList.add('hidden');
   resultPanel.classList.add('hidden');
   errorPanel.classList.add('hidden');
+  progressFill.classList.remove('indeterminate');
   processBtn.disabled = false;
   processBtn.textContent = '⚙️ Procesar video';
   rotationLabel.textContent = '0°';
@@ -93,6 +119,9 @@ function loadFile(file) {
     naturalW = previewVideo.videoWidth;
     naturalH = previewVideo.videoHeight;
     applyPreviewTransform();
+    const durMin = Math.floor(previewVideo.duration / 60);
+    const durSec = Math.round(previewVideo.duration % 60).toString().padStart(2, '0');
+    fileInfo.textContent = `${file.name} · ${formatBytes(file.size)} · ${naturalW}×${naturalH} · ${durMin}:${durSec}`;
   };
   uploadPanel.classList.add('hidden');
   editPanel.classList.remove('hidden');
@@ -136,8 +165,9 @@ processBtn.addEventListener('click', async () => {
   errorPanel.classList.add('hidden');
   resultPanel.classList.add('hidden');
   progressWrap.classList.remove('hidden');
-  progressFill.style.width = '0%';
+  progressFill.classList.add('indeterminate');
   progressText.textContent = 'Subiendo video...';
+  startElapsedTimer();
 
   const formData = new FormData();
   formData.append('video', currentFile);
@@ -152,36 +182,71 @@ processBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al procesar el video.');
 
+    currentJobId = data.jobId;
     processBtn.textContent = 'Procesando...';
+    progressText.textContent = 'Analizando video...';
     pollStatus(data.jobId);
   } catch (err) {
     showError(err.message);
   }
 });
 
+cancelBtn.addEventListener('click', async () => {
+  if (!currentJobId) return;
+  cancelBtn.disabled = true;
+  cancelBtn.textContent = 'Cancelando...';
+  try {
+    await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
+  } catch (err) {
+    // si falla el pedido de cancelar, el polling lo va a resolver igual
+  }
+});
+
+function startElapsedTimer() {
+  elapsedStart = Date.now();
+  elapsedText.textContent = '0s';
+  elapsedTimer = setInterval(() => {
+    const secs = Math.floor((Date.now() - elapsedStart) / 1000);
+    elapsedText.textContent = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  }, 1000);
+}
+
 function pollStatus(jobId) {
-  const interval = setInterval(async () => {
+  pollTimer = setInterval(async () => {
     try {
       const res = await fetch(`/api/status/${jobId}`);
       const data = await res.json();
-      if (data.status === 'processing') {
+
+      if (data.status === 'analyzing') {
+        progressText.textContent = 'Analizando video...';
+      } else if (data.status === 'processing') {
+        progressFill.classList.remove('indeterminate');
         progressFill.style.width = data.progress + '%';
         progressText.textContent = `Procesando... ${data.progress}%`;
       } else if (data.status === 'done') {
-        clearInterval(interval);
+        stopTimers();
+        progressFill.classList.remove('indeterminate');
         progressFill.style.width = '100%';
-        progressText.textContent = 'Procesando... 100%';
         downloadLink.href = `/api/download/${jobId}`;
+        const savedPct = currentFile && data.outputSize
+          ? Math.round((1 - data.outputSize / currentFile.size) * 100)
+          : null;
+        resultMeta.textContent = data.outputSize
+          ? `Tamaño final: ${formatBytes(data.outputSize)}` + (savedPct && savedPct > 0 ? ` (${savedPct}% más liviano)` : '')
+          : '';
         resultPanel.classList.remove('hidden');
         progressWrap.classList.add('hidden');
         processBtn.disabled = false;
         processBtn.textContent = '⚙️ Procesar video';
+      } else if (data.status === 'cancelled') {
+        stopTimers();
+        showError(data.error || 'Proceso cancelado.');
       } else if (data.status === 'error') {
-        clearInterval(interval);
+        stopTimers();
         showError(data.error || 'Ocurrió un error al procesar el video.');
       }
     } catch (err) {
-      clearInterval(interval);
+      stopTimers();
       showError('Se perdió la conexión con el servidor.');
     }
   }, 800);
@@ -191,6 +256,9 @@ function showError(msg) {
   errorPanel.textContent = '❌ ' + msg;
   errorPanel.classList.remove('hidden');
   progressWrap.classList.add('hidden');
+  progressFill.classList.remove('indeterminate');
+  cancelBtn.disabled = false;
+  cancelBtn.textContent = '✕ Cancelar';
   processBtn.disabled = false;
   processBtn.textContent = '⚙️ Procesar video';
 }

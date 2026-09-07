@@ -72,6 +72,13 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   display: block;
 }
 
+.file-info {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin: 10px 0 20px;
+}
+
 .meta-panel {
   border-color: rgba(108, 92, 231, 0.4);
   background: rgba(108, 92, 231, 0.06);
@@ -170,12 +177,21 @@ select {
 .btn-secondary:hover { color: var(--text); border-color: var(--text-dim); }
 
 .progress-wrap { margin-top: 20px; }
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+#progressText { color: var(--text-dim); font-size: 0.85rem; }
+#elapsedText { color: var(--text-dim); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
 .progress-bar {
   height: 10px;
   background: #1f2330;
   border-radius: 6px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  position: relative;
 }
 .progress-fill {
   height: 100%;
@@ -183,7 +199,26 @@ select {
   width: 0%;
   transition: width 0.3s;
 }
-#progressText { color: var(--text-dim); font-size: 0.85rem; }
+.progress-fill.indeterminate {
+  width: 30% !important;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(430%); }
+}
+.btn-ghost-cancel {
+  display: block;
+  margin: 0 auto;
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.btn-ghost-cancel:hover { color: var(--error); border-color: var(--error); }
 
 .result {
   margin-top: 20px;
@@ -194,6 +229,7 @@ select {
   border-radius: 12px;
 }
 .result p { color: var(--success); margin: 0 0 14px; }
+.result-meta { color: var(--text-dim) !important; font-size: 0.82rem; margin-top: -8px !important; }
 
 .error {
   margin-top: 20px;
