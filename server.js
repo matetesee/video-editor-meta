@@ -109,9 +109,14 @@ app.post('/api/process', upload.single('video'), (req, res) => {
     // (mismo criterio que usa Instagram al convertir horizontal -> vertical).
     const { width: W, height: H } = metaPreset;
     const src = rotFilter ? `[0:v]${rotFilter}[rot];[rot]` : '[0:v]';
+    // El fondo se desenfoca a baja resolución y recién ahí se escala al tamaño
+    // final: hacer gblur directo sobre 1080x1920 es carísimo en CPU/memoria y
+    // puede tirar abajo el proceso (SIGKILL) en un contenedor chico.
+    const bw = Math.round(W / 4);
+    const bh = Math.round(H / 4);
     const filterGraph =
       `${src}split=2[bg][fg];` +
-      `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=20[bg];` +
+      `[bg]scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},gblur=sigma=6,scale=${W}:${H}[bg];` +
       `[fg]scale=${W}:${H}:force_original_aspect_ratio=decrease[fg];` +
       `[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto,fps=30[vout]`;
 
