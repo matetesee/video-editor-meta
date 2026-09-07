@@ -1,0 +1,19 @@
+{
+  "name": "video-editor-meta",
+  "version": "1.0.0",
+  "description": "Editor de video para Meta Ads - rotacion, codec de audio y optimizacion",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "express": "^4.19.2",
+    "fluent-ffmpeg": "^2.1.3",
+    "multer": "^2.0.0"
+  }
+}

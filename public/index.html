@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor de Video - Meta Ads</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🎬 Editor de Video para Meta</h1>
+      <p class="subtitle">Subí tu video, rotalo, cambiá el codec de audio y descargalo optimizado.</p>
+    </header>
+
+    <main>
+      <section class="panel" id="uploadPanel">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept="video/*" hidden>
+          <span id="dropzoneText">📤 Arrastrá tu video acá o hacé click para elegirlo</span>
+        </label>
+      </section>
+
+      <section class="panel hidden" id="editPanel">
+        <div class="preview-wrap">
+          <video id="previewVideo" controls></video>
+        </div>
+
+        <div class="controls">
+          <div class="control-group">
+            <label>Rotación</label>
+            <button id="rotateBtn" class="btn-rotate">↻ Rotar 90°</button>
+            <span id="rotationLabel">0°</span>
+          </div>
+
+          <div class="control-group">
+            <label for="audioCodec">Codec de audio</label>
+            <select id="audioCodec">
+              <option value="aac" selected>AAC (recomendado para Meta)</option>
+              <option value="mp3">MP3</option>
+              <option value="opus">Opus</option>
+              <option value="copy">Mantener original</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="audioBitrate">Bitrate de audio</label>
+            <select id="audioBitrate">
+              <option value="96k">96 kbps</option>
+              <option value="128k" selected>128 kbps</option>
+              <option value="192k">192 kbps</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label for="quality">Calidad / tamaño</label>
+            <select id="quality">
+              <option value="high">Alta calidad (archivo más pesado)</option>
+              <option value="balanced" selected>Balanceado (recomendado)</option>
+              <option value="small">Archivo liviano</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="processBtn" class="btn-primary">⚙️ Procesar video</button>
+          <button id="resetBtn" class="btn-secondary">Elegir otro video</button>
+        </div>
+
+        <div class="progress-wrap hidden" id="progressWrap">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+          <span id="progressText">Procesando... 0%</span>
+        </div>
+
+        <div class="result hidden" id="resultPanel">
+          <p>✅ ¡Listo! Tu video quedó procesado y optimizado.</p>
+          <a id="downloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+        </div>
+
+        <div class="error hidden" id="errorPanel"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
