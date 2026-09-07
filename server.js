@@ -98,6 +98,12 @@ app.post('/api/process', upload.single('video'), (req, res) => {
       `-bufsize ${q.maxrateMbps * 2}M`,
       '-movflags +faststart',
       '-pix_fmt yuv420p',
+      // En contenedores el runtime suele reportar el total de CPUs del host
+      // (a veces decenas), y libx264 arranca un thread de encoding por cada
+      // una si no se lo limitamos -> pico de memoria/CPU que el contenedor
+      // mata con SIGKILL. Lo acotamos a algo razonable y fijo.
+      '-threads', '2',
+      '-x264-params', 'threads=2:lookahead_threads=1:sliced_threads=0',
     ]);
 
   const rotFilter = rotationFilter(rotation);
