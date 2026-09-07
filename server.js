@@ -54,42 +54,88 @@ const AUDIO_CODECS = {
   copy: { codec: 'copy', ext: null },
 };
 
+// Formatos que pide Meta para Feed/Reels/Stories (specs oficiales de Meta Ads).
+// width/height ya vienen en la relación de aspecto que Meta recomienda por placement.
+const META_PRESETS = {
+  reels: { width: 1080, height: 1920, label: 'Reels / Stories 9:16' },
+  square: { width: 1080, height: 1080, label: 'Feed cuadrado 1:1' },
+  feed_vertical: { width: 1080, height: 1350, label: 'Feed vertical 4:5' },
+  none: null, // manual: no se fuerza relación de aspecto
+};
+
+// Bitrate de video (maxrate/bufsize) recomendado por Meta según calidad elegida.
+const QUALITY_BITRATE = {
+  high: { maxrateMbps: 10, crf: 18, preset: 'slow' },
+  balanced: { maxrateMbps: 6, crf: 23, preset: 'veryfast' },
+  small: { maxrateMbps: 3, crf: 28, preset: 'veryfast' },
+};
+
 app.post('/api/process', upload.single('video'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
 
   const rotation = parseInt(req.body.rotation || '0', 10);
   const audioCodecKey = req.body.audioCodec || 'aac';
   const audioBitrate = req.body.audioBitrate || '128k';
-  const quality = req.body.quality || 'balanced'; // balanced | high | small
+  const quality = req.body.quality || 'balanced'; // high | balanced | small
+  const metaPresetKey = req.body.metaPreset || 'none'; // reels | square | feed_vertical | none
 
   const audioCfg = AUDIO_CODECS[audioCodecKey] || AUDIO_CODECS.aac;
+  const metaPreset = META_PRESETS[metaPresetKey] || null;
+  const q = QUALITY_BITRATE[quality] || QUALITY_BITRATE.balanced;
+
   const jobId = randomUUID();
   const inputPath = req.file.path;
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
 
   jobs.set(jobId, { status: 'processing', progress: 0 });
 
-  let crf = 23;
-  let preset = 'veryfast';
-  if (quality === 'high') { crf = 18; preset = 'slow'; }
-  if (quality === 'small') { crf = 28; preset = 'veryfast'; }
-
   const command = ffmpeg(inputPath)
     .videoCodec('libx264')
     .outputOptions([
-      `-crf ${crf}`,
-      `-preset ${preset}`,
+      `-crf ${q.crf}`,
+      `-preset ${q.preset}`,
+      `-maxrate ${q.maxrateMbps}M`,
+      `-bufsize ${q.maxrateMbps * 2}M`,
       '-movflags +faststart',
       '-pix_fmt yuv420p',
     ]);
 
-  const vf = rotationFilter(rotation);
-  if (vf) command.videoFilters(vf);
+  const rotFilter = rotationFilter(rotation);
 
-  if (audioCfg.codec === 'copy') {
-    command.outputOptions(['-c:a copy']);
+  if (metaPreset) {
+    // Modo "optimizado para Meta": encaja el video en la relación de aspecto exacta
+    // que pide el placement (Reels/Stories 9:16, Feed 1:1 o 4:5), sin recortar el
+    // contenido: lo centra sobre un fondo desenfocado que rellena todo el cuadro
+    // (mismo criterio que usa Instagram al convertir horizontal -> vertical).
+    const { width: W, height: H } = metaPreset;
+    const src = rotFilter ? `[0:v]${rotFilter}[rot];[rot]` : '[0:v]';
+    const filterGraph =
+      `${src}split=2[bg][fg];` +
+      `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=20[bg];` +
+      `[fg]scale=${W}:${H}:force_original_aspect_ratio=decrease[fg];` +
+      `[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto,fps=30[vout]`;
+
+    command.outputOptions(['-filter_complex', filterGraph, '-map', '[vout]', '-map', '0:a?']);
+
+    // Meta recomienda AAC 48kHz estéreo para el audio de los anuncios.
+    if (audioCfg.codec === 'copy') {
+      command.outputOptions(['-c:a', 'copy']);
+    } else {
+      command
+        .audioCodec(audioCfg.codec)
+        .audioBitrate(audioBitrate)
+        .audioFrequency(48000)
+        .audioChannels(2);
+    }
+    command.outputOptions(['-profile:v', 'main', '-level', '4.0']);
   } else {
-    command.audioCodec(audioCfg.codec).audioBitrate(audioBitrate);
+    // Modo manual: solo se aplica la rotación elegida, sin forzar relación de aspecto.
+    if (rotFilter) command.videoFilters(rotFilter);
+    if (audioCfg.codec === 'copy') {
+      command.outputOptions(['-c:a', 'copy']);
+    } else {
+      command.audioCodec(audioCfg.codec).audioBitrate(audioBitrate);
+    }
   }
 
   command

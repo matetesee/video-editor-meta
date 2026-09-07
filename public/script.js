@@ -16,6 +16,19 @@ const errorPanel = document.getElementById('errorPanel');
 const audioCodecSel = document.getElementById('audioCodec');
 const audioBitrateSel = document.getElementById('audioBitrate');
 const qualitySel = document.getElementById('quality');
+const metaPresetSel = document.getElementById('metaPreset');
+const metaHint = document.getElementById('metaHint');
+
+const META_HINTS = {
+  reels: 'Se ajusta automáticamente a 1080x1920 (9:16), códec H.264 + AAC 48kHz y bitrate dentro de lo que pide Meta para Reels/Stories. El contenido se centra sobre un fondo relleno, sin recortarlo.',
+  square: 'Se ajusta automáticamente a 1080x1080 (1:1), códec H.264 + AAC 48kHz y bitrate recomendado por Meta para Feed.',
+  feed_vertical: 'Se ajusta automáticamente a 1080x1350 (4:5), códec H.264 + AAC 48kHz y bitrate recomendado por Meta para Feed.',
+  none: 'No se fuerza ninguna proporción: solo se aplican la rotación y las opciones manuales de abajo tal cual las dejaste.',
+};
+
+metaPresetSel.addEventListener('change', () => {
+  metaHint.textContent = META_HINTS[metaPresetSel.value] || '';
+});
 
 let currentFile = null;
 let rotation = 0;
@@ -62,6 +75,8 @@ function resetAll() {
   processBtn.disabled = false;
   processBtn.textContent = '⚙️ Procesar video';
   rotationLabel.textContent = '0°';
+  metaPresetSel.value = 'reels';
+  metaHint.textContent = META_HINTS.reels;
 }
 
 function loadFile(file) {
@@ -130,6 +145,7 @@ processBtn.addEventListener('click', async () => {
   formData.append('audioCodec', audioCodecSel.value);
   formData.append('audioBitrate', audioBitrateSel.value);
   formData.append('quality', qualitySel.value);
+  formData.append('metaPreset', metaPresetSel.value);
 
   try {
     const res = await fetch('/api/process', { method: 'POST', body: formData });

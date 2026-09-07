@@ -72,6 +72,30 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   display: block;
 }
 
+.meta-panel {
+  border-color: rgba(108, 92, 231, 0.4);
+  background: rgba(108, 92, 231, 0.06);
+  margin-bottom: 20px;
+}
+.meta-panel label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: block;
+  margin-bottom: 8px;
+}
+.meta-panel select {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.meta-hint {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
 .controls {
   display: grid;
   grid-template-columns: 1fr 1fr;

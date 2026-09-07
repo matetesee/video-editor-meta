@@ -26,6 +26,17 @@
           <video id="previewVideo" controls></video>
         </div>
 
+        <div class="panel meta-panel">
+          <label for="metaPreset">📱 Formato para Meta Ads</label>
+          <select id="metaPreset">
+            <option value="reels" selected>Reels / Stories (9:16 vertical) — recomendado</option>
+            <option value="square">Feed cuadrado (1:1)</option>
+            <option value="feed_vertical">Feed vertical (4:5)</option>
+            <option value="none">Manual (mantener proporción original)</option>
+          </select>
+          <p class="meta-hint" id="metaHint">Se ajusta automáticamente a la resolución, códec y bitrate que pide Meta para que no lo rechace ni lo marque como "no se entregará en esta ubicación". El contenido se centra sobre un fondo relleno, sin recortarlo.</p>
+        </div>
+
         <div class="controls">
           <div class="control-group">
             <label>Rotación</label>
