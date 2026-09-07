@@ -143,12 +143,21 @@ app.post('/api/process', upload.single('video'), (req, res) => {
     }
   }
 
+  let stderrTail = [];
   command
+    .on('start', (cmdLine) => console.log(`[ffmpeg:${jobId}] start: ${cmdLine}`))
+    .on('stderr', (line) => {
+      stderrTail.push(line);
+      if (stderrTail.length > 40) stderrTail.shift();
+      console.log(`[ffmpeg:${jobId}] ${line}`);
+    })
     .on('progress', (p) => {
       const job = jobs.get(jobId);
       if (job) job.progress = Math.min(99, Math.round(p.percent || 0));
     })
     .on('error', (err) => {
+      console.error(`[ffmpeg:${jobId}] ERROR: ${err.message}`);
+      console.error(`[ffmpeg:${jobId}] last stderr lines:\n${stderrTail.join('\n')}`);
       jobs.set(jobId, { status: 'error', error: err.message });
       cleanupFile(inputPath);
     })
