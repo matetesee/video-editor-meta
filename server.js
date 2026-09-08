@@ -610,11 +610,16 @@ app.post('/api/edit', requireAuthApi, upload.array('clips', 20), async (req, res
       .audioBitrate('128k');
 
     if (overlayEnabled) {
+      // OJO: se usa -filter_complex + -map en vez de -vf/-filter:v a
+      // proposito. Con este build de ffmpeg, fluent-ffmpeg reordena las
+      // opciones y termina poniendo "-acodec/-vcodec" ANTES del filtro; con
+      // -vf eso hace que el texto se pierda en silencio (sin ningun error),
+      // algo que se detecto probando esto a mano por SSH. Con
+      // -filter_complex + -map el orden no afecta y funciona siempre.
       const yExpr = overlayPosition === 'top' ? 'h*0.08' : overlayPosition === 'center' ? '(h-text_h)/2' : 'h*0.85';
       const fontSize = Math.round(H * 0.055);
-      command.videoFilters(
-        `drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16`
-      );
+      const drawtextFilter = `[0:v]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16[vout]`;
+      command.outputOptions(['-filter_complex', drawtextFilter, '-map', '[vout]', '-map', '0:a?']);
     }
 
     runJob(jobId, command, [...intermediatePaths, listPath], outputPath, 40);
