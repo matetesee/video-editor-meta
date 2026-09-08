@@ -206,7 +206,10 @@ function setJob(jobId, patch) {
 // Conecta los eventos de un FfmpegCommand ya armado con el ciclo de vida del
 // job (progreso, timeout de seguridad, cancelacion, limpieza de temporales).
 // Lo usan tanto /api/process como /api/edit.
-function runJob(jobId, command, inputPaths, outputPath) {
+function runJob(jobId, command, inputPaths, outputPath, progressFrom = 0) {
+  // progressFrom: para jobs con una fase previa (ej. normalizar clips en el
+  // mini editor antes de este encode final), asi la barra sigue subiendo en
+  // vez de saltar de vuelta a 0%.
   let stderrTail = [];
   let killedForTimeout = false;
   const timeoutHandle = setTimeout(() => {
@@ -226,7 +229,8 @@ function runJob(jobId, command, inputPaths, outputPath) {
       if (stderrTail.length > 40) stderrTail.shift();
     })
     .on('progress', (p) => {
-      setJob(jobId, { progress: Math.min(99, Math.round(p.percent || 0)) });
+      const scaled = progressFrom + ((p.percent || 0) / 100) * (100 - progressFrom);
+      setJob(jobId, { progress: Math.min(99, Math.round(scaled)) });
     })
     .on('error', (err) => {
       clearTimeout(timeoutHandle);
@@ -508,64 +512,113 @@ app.post('/api/edit', requireAuthApi, upload.array('clips', 20), async (req, res
 
   const { width: W, height: H } = metaPreset;
   const jobId = randomUUID();
-  const inputPaths = req.files.map((f) => f.path);
+  const uploadedPaths = req.files.map((f) => f.path);
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
 
   jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
   res.json({ jobId });
 
-  const clipFilterParts = [];
-  const concatRefs = [];
-  req.files.forEach((file, i) => {
-    const meta = clipsMeta[i] || {};
-    const start = Math.max(0, Number(meta.start) || 0);
-    const endRaw = Number(meta.end);
-    const end = endRaw > start ? endRaw : start + 1; // por si llega algo invalido, no rompe el proceso
+  // Normalizar cada clip a un archivo intermedio (mismo tamaño/fps/codec)
+  // ANTES de concatenar. El filtro "concat" de ffmpeg no siempre negocia
+  // bien clips que entran con distinta resolucion/framerate original: en
+  // este build llegamos a ver que silenciosamente perdia el drawtext final
+  // sin tirar ningun error. Concatenar clips ya uniformes (via el demuxer
+  // de concat, mucho mas simple) evita ese problema por completo.
+  const intermediatePaths = [];
 
-    const videoChain = buildBlurFitFilter(`[${i}:v]trim=start=${start}:end=${end},setpts=PTS-STARTPTS,`, W, H, `,setsar=1,fps=30[v${i}]`, `_${i}`);
-    clipFilterParts.push(videoChain);
-    clipFilterParts.push(
-      `[${i}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo[a${i}]`
-    );
-    concatRefs.push(`[v${i}][a${i}]`);
-  });
+  function encodeClipToIntermediate(inputPath, outIndex, start, end) {
+    return new Promise((resolve, reject) => {
+      const outPath = path.join(TMP_DIR, `${jobId}_clip${outIndex}.mp4`);
+      const filterGraph =
+        buildBlurFitFilter(`[0:v]trim=start=${start}:end=${end},setpts=PTS-STARTPTS,`, W, H, ',setsar=1,fps=30[vout]', '_c') +
+        `;[0:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo[aout]`;
 
-  const concatFilter = `${concatRefs.join('')}concat=n=${req.files.length}:v=1:a=1[vcat][acat]`;
-
-  let textFilter;
-  if (overlayEnabled) {
-    const yExpr = overlayPosition === 'top' ? 'h*0.08' : overlayPosition === 'center' ? '(h-text_h)/2' : 'h*0.85';
-    const fontSize = Math.round(H * 0.055);
-    textFilter = `;[vcat]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16[vout]`;
-  } else {
-    textFilter = ';[vcat]null[vout]';
+      ffmpeg(inputPath)
+        .videoCodec('libx264')
+        .outputOptions([
+          '-crf', '20',
+          '-preset', 'veryfast',
+          '-pix_fmt', 'yuv420p',
+          '-threads', '2',
+          '-x264-params', 'threads=2:lookahead_threads=1:sliced_threads=0',
+          '-filter_complex', filterGraph,
+          '-map', '[vout]',
+          '-map', '[aout]',
+          '-profile:v', 'main',
+          '-level', '4.0',
+        ])
+        .audioCodec('aac')
+        .audioBitrate('128k')
+        .on('error', reject)
+        .on('end', () => resolve(outPath))
+        .save(outPath);
+    });
   }
 
-  const filterGraph = clipFilterParts.join(';') + ';' + concatFilter + textFilter;
+  (async () => {
+    try {
+      for (let i = 0; i < req.files.length; i++) {
+        if (jobs.get(jobId)?.status === 'cancelled') {
+          intermediatePaths.forEach(cleanupFile);
+          uploadedPaths.forEach(cleanupFile);
+          return;
+        }
+        const meta = clipsMeta[i] || {};
+        const start = Math.max(0, Number(meta.start) || 0);
+        const endRaw = Number(meta.end);
+        const end = endRaw > start ? endRaw : start + 1; // por si llega algo invalido, no rompe el proceso
 
-  const command = ffmpeg();
-  req.files.forEach((f) => command.input(f.path));
-  command
-    .videoCodec('libx264')
-    .outputOptions([
-      `-crf ${q.crf}`,
-      `-preset ${q.preset}`,
-      `-maxrate ${q.maxrateMbps}M`,
-      `-bufsize ${q.maxrateMbps * 2}M`,
-      '-movflags +faststart',
-      '-pix_fmt yuv420p',
-      '-threads', '2',
-      '-x264-params', 'threads=2:lookahead_threads=1:sliced_threads=0',
-      '-filter_complex', filterGraph,
-      '-map', '[vout]',
-      '-map', '[acat]',
-      '-profile:v', 'main',
-      '-level', '4.0',
-    ])
-    .audioCodec('aac')
-    .audioBitrate('128k');
+        const outPath = await encodeClipToIntermediate(req.files[i].path, i, start, end);
+        intermediatePaths.push(outPath);
+        cleanupFile(req.files[i].path); // ya no hace falta el original subido
+        setJob(jobId, { progress: Math.round(((i + 1) / req.files.length) * 40) }); // 0-40%: normalizando clips
+      }
+    } catch (err) {
+      console.error(`[edit:${jobId}] error normalizando clips:`, err.message);
+      intermediatePaths.forEach(cleanupFile);
+      uploadedPaths.forEach(cleanupFile);
+      setJob(jobId, { status: 'error', error: 'No se pudo procesar alguno de los clips (¿está corrupto o en un formato no soportado?).' });
+      return;
+    }
 
-  runJob(jobId, command, inputPaths, outputPath);
+    if (jobs.get(jobId)?.status === 'cancelled') {
+      intermediatePaths.forEach(cleanupFile);
+      return;
+    }
+
+    const listPath = path.join(TMP_DIR, `${jobId}_list.txt`);
+    const listContent = intermediatePaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+    fs.writeFileSync(listPath, listContent);
+
+    const command = ffmpeg()
+      .input(listPath)
+      .inputOptions(['-f', 'concat', '-safe', '0'])
+      .videoCodec('libx264')
+      .outputOptions([
+        `-crf ${q.crf}`,
+        `-preset ${q.preset}`,
+        `-maxrate ${q.maxrateMbps}M`,
+        `-bufsize ${q.maxrateMbps * 2}M`,
+        '-movflags +faststart',
+        '-pix_fmt yuv420p',
+        '-threads', '2',
+        '-x264-params', 'threads=2:lookahead_threads=1:sliced_threads=0',
+        '-profile:v', 'main',
+        '-level', '4.0',
+      ])
+      .audioCodec('aac')
+      .audioBitrate('128k');
+
+    if (overlayEnabled) {
+      const yExpr = overlayPosition === 'top' ? 'h*0.08' : overlayPosition === 'center' ? '(h-text_h)/2' : 'h*0.85';
+      const fontSize = Math.round(H * 0.055);
+      command.videoFilters(
+        `drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16`
+      );
+    }
+
+    runJob(jobId, command, [...intermediatePaths, listPath], outputPath, 40);
+  })();
 });
 
 app.get('/api/status/:jobId', requireAuthApi, (req, res) => {
