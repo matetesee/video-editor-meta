@@ -15,6 +15,15 @@ async function findByGoogleId(googleId) {
   return rows[0] || null;
 }
 
+async function findById(id) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+async function setAvatar(userId, dataUrl) {
+  await pool.query('UPDATE users SET avatar_data_url = $1 WHERE id = $2', [dataUrl, userId]);
+}
+
 async function createUser(email, password, displayName) {
   const passwordHash = bcrypt.hashSync(String(password), 10);
   const { rows } = await pool.query(
@@ -56,4 +65,12 @@ async function linkOrCreateGoogleUser({ googleId, email, displayName }) {
   return rows[0];
 }
 
-module.exports = { findByEmail, findByGoogleId, createUser, verifyPassword, linkOrCreateGoogleUser };
+module.exports = {
+  findByEmail,
+  findByGoogleId,
+  findById,
+  createUser,
+  verifyPassword,
+  linkOrCreateGoogleUser,
+  setAvatar,
+};

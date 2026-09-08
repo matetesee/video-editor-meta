@@ -1,0 +1,6 @@
+[phases.setup]
+# Fuente instalada a nivel de sistema para que el filtro "drawtext" de ffmpeg
+# (usado por el mini editor para quemar texto sobre el video) siempre
+# encuentre una tipografia via fontconfig, sin depender de que el usuario
+# suba nada.
+aptPkgs = ["fonts-dejavu-core"]

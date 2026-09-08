@@ -13,7 +13,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const ffprobePath = require('@ffprobe-installer/ffprobe').path;
 const { pool, initDb } = require('./db');
-const { createUser, findByEmail, verifyPassword, linkOrCreateGoogleUser } = require('./users');
+const { createUser, findByEmail, findById, verifyPassword, linkOrCreateGoogleUser, setAvatar } = require('./users');
 const { requireAuthPage, requireAuthApi } = require('./auth');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -130,8 +130,38 @@ app.post('/api/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
 
-app.get('/api/me', requireAuthApi, (req, res) => {
-  res.json({ email: req.session.user.email });
+app.get('/api/me', requireAuthApi, async (req, res) => {
+  try {
+    const user = await findById(req.session.user.id);
+    res.json({ email: req.session.user.email, avatarUrl: (user && user.avatar_data_url) || null });
+  } catch (err) {
+    res.json({ email: req.session.user.email, avatarUrl: null });
+  }
+});
+
+app.post('/api/me/avatar', requireAuthApi, upload.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+  const inputPath = req.file.path;
+  const outputPath = path.join(TMP_DIR, `avatar-${randomUUID()}.jpg`);
+  try {
+    await new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .outputOptions(['-vf', 'scale=256:256:force_original_aspect_ratio=increase,crop=256:256', '-frames:v', '1', '-q:v', '4'])
+        .on('error', reject)
+        .on('end', resolve)
+        .save(outputPath);
+    });
+    const buffer = fs.readFileSync(outputPath);
+    const dataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+    await setAvatar(req.session.user.id, dataUrl);
+    res.json({ avatarUrl: dataUrl });
+  } catch (err) {
+    console.error('[avatar]', err.message);
+    res.status(500).json({ error: 'No se pudo procesar la imagen. Probá con otra foto.' });
+  } finally {
+    fs.unlink(inputPath, () => {});
+    fs.unlink(outputPath, () => {});
+  }
 });
 
 if (GOOGLE_ENABLED) {
@@ -155,7 +185,9 @@ app.get('/', requireAuthPage, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app.html'));
 });
 
-// Jobs en memoria (instancia unica - MVP).
+// Jobs en memoria (instancia unica - MVP). Sirve tanto para el optimizador
+// como para el mini editor: ambos comparten el mismo ciclo de vida
+// (analizando -> procesando -> listo/error/cancelado).
 const jobs = new Map();
 
 // Si ffmpeg se cuelga (video corrupto, filtro raro, contenedor sin CPU) lo
@@ -169,6 +201,57 @@ function cleanupFile(filePath) {
 
 function setJob(jobId, patch) {
   jobs.set(jobId, { ...jobs.get(jobId), ...patch });
+}
+
+// Conecta los eventos de un FfmpegCommand ya armado con el ciclo de vida del
+// job (progreso, timeout de seguridad, cancelacion, limpieza de temporales).
+// Lo usan tanto /api/process como /api/edit.
+function runJob(jobId, command, inputPaths, outputPath) {
+  let stderrTail = [];
+  let killedForTimeout = false;
+  const timeoutHandle = setTimeout(() => {
+    killedForTimeout = true;
+    try { command.kill('SIGKILL'); } catch {}
+  }, MAX_PROCESS_MS);
+
+  const cleanupInputs = () => inputPaths.forEach(cleanupFile);
+
+  command
+    .on('start', (cmdLine) => {
+      console.log(`[ffmpeg:${jobId}] start: ${cmdLine}`);
+      setJob(jobId, { status: 'processing' });
+    })
+    .on('stderr', (line) => {
+      stderrTail.push(line);
+      if (stderrTail.length > 40) stderrTail.shift();
+    })
+    .on('progress', (p) => {
+      setJob(jobId, { progress: Math.min(99, Math.round(p.percent || 0)) });
+    })
+    .on('error', (err) => {
+      clearTimeout(timeoutHandle);
+      if (jobs.get(jobId)?.status === 'cancelled') {
+        cleanupInputs();
+        return; // ya se informo al frontend, no pisar el mensaje
+      }
+      const message = killedForTimeout
+        ? 'El proceso tardó demasiado y se canceló. Probá con archivos más cortos, más livianos, o con menor calidad.'
+        : err.message;
+      console.error(`[ffmpeg:${jobId}] ERROR: ${message}`);
+      if (!killedForTimeout) console.error(`[ffmpeg:${jobId}] last stderr:\n${stderrTail.join('\n')}`);
+      setJob(jobId, { status: 'error', error: message });
+      cleanupInputs();
+    })
+    .on('end', () => {
+      clearTimeout(timeoutHandle);
+      let outputSize = 0;
+      try { outputSize = fs.statSync(outputPath).size; } catch {}
+      setJob(jobId, { status: 'done', progress: 100, outputPath, outputSize });
+      cleanupInputs();
+    })
+    .save(outputPath);
+
+  setJob(jobId, { command, inputPaths });
 }
 
 // Rotacion en grados -> filtro de ffmpeg
@@ -240,6 +323,19 @@ const QUALITY_BITRATE = {
 // calidad visible.
 const MAX_WORK_DIMENSION = 1920;
 
+// Tipografia para el texto quemado del mini editor. La instala el propio
+// contenedor via apt (ver nixpacks.toml) asi drawtext siempre la encuentra,
+// sin depender de que el usuario suba nada ni de si el SO base trae fuentes.
+const DRAWTEXT_FONT = 'DejaVu Sans';
+
+function escapeDrawtext(text) {
+  return String(text)
+    .replace(/\\/g, '\\\\')
+    .replace(/:/g, '\\:')
+    .replace(/'/g, '’') // comilla tipografica: evita el quilombo de escapar comillas simples
+    .replace(/%/g, '\\%');
+}
+
 // Caracteres invalidos como nombre de archivo en Windows/Mac/Linux. No se
 // tocan espacios, guiones ni acentos: esos son validos en cualquier SO.
 const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
@@ -251,6 +347,22 @@ function sanitizeFilename(title) {
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned || 'video-editado';
+}
+
+// uid tiene que ser unico dentro del filtergraph completo: cuando se
+// concatenan varios clips en un solo -filter_complex (mini editor), cada
+// llamada a esta funcion agrega sus propias etiquetas intermedias, y si dos
+// llamadas usaran el mismo nombre (ej. "[bg]") ffmpeg tira error porque
+// quedarian dos filtros distintos escribiendo a la misma etiqueta.
+function buildBlurFitFilter(srcLabel, W, H, extraSuffix, uid) {
+  const bw = Math.max(2, Math.round(W / 6));
+  const bh = Math.max(2, Math.round(H / 6));
+  return (
+    `${srcLabel}scale='min(${MAX_WORK_DIMENSION},iw)':'min(${MAX_WORK_DIMENSION},ih)':force_original_aspect_ratio=decrease:flags=fast_bilinear,split=2[bg${uid}][fg${uid}];` +
+    `[bg${uid}]scale=${bw}:${bh}:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=${bw}:${bh},gblur=sigma=5,scale=${W}:${H}:flags=fast_bilinear[bg2${uid}];` +
+    `[fg${uid}]scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=fast_bilinear[fg2${uid}];` +
+    `[bg2${uid}][fg2${uid}]overlay=(W-w)/2:(H-h)/2:format=auto${extraSuffix}`
+  );
 }
 
 app.post('/api/process', requireAuthApi, upload.single('video'), async (req, res) => {
@@ -332,20 +444,8 @@ app.post('/api/process', requireAuthApi, upload.single('video'), async (req, res
     } else {
       // No calza: se centra sobre un fondo desenfocado que rellena todo el
       // cuadro, sin recortar el contenido (igual criterio que usa Instagram
-      // al convertir horizontal -> vertical). Para que sea rapido:
-      //  1) primero se baja el video de trabajo a una resolucion razonable
-      //     (evita procesar 4K a traves de todo el grafo de filtros),
-      //  2) el desenfoque se aplica sobre una copia chica y recien despues
-      //     se escala arriba (gblur a resolucion completa es carisimo),
-      //  3) se usa el algoritmo de escalado mas rapido (fast_bilinear).
-      const bw = Math.max(2, Math.round(W / 6));
-      const bh = Math.max(2, Math.round(H / 6));
-      filterGraph =
-        `${src}scale='min(${MAX_WORK_DIMENSION},iw)':'min(${MAX_WORK_DIMENSION},ih)':force_original_aspect_ratio=decrease:flags=fast_bilinear[work];` +
-        `[work]split=2[bg][fg];` +
-        `[bg]scale=${bw}:${bh}:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=${bw}:${bh},gblur=sigma=5,scale=${W}:${H}:flags=fast_bilinear[bg];` +
-        `[fg]scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=fast_bilinear[fg];` +
-        `[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto${fpsSuffix}[vout]`;
+      // al convertir horizontal -> vertical).
+      filterGraph = buildBlurFitFilter(src, W, H, `,setsar=1${fpsSuffix}[vout]`, '_p');
     }
 
     command.outputOptions(['-filter_complex', filterGraph, '-map', '[vout]', '-map', '0:a?']);
@@ -371,49 +471,100 @@ app.post('/api/process', requireAuthApi, upload.single('video'), async (req, res
     }
   }
 
-  let stderrTail = [];
-  let killedForTimeout = false;
-  const timeoutHandle = setTimeout(() => {
-    killedForTimeout = true;
-    try { command.kill('SIGKILL'); } catch {}
-  }, MAX_PROCESS_MS);
+  runJob(jobId, command, [inputPath], outputPath);
+});
 
+// --- Mini editor: varios clips, recorte por clip, texto quemado opcional ---
+app.post('/api/edit', requireAuthApi, upload.array('clips', 20), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'No se recibió ningún clip.' });
+  }
+
+  let clipsMeta;
+  try {
+    clipsMeta = JSON.parse(req.body.clipsMeta || '[]');
+  } catch {
+    clipsMeta = [];
+  }
+  if (!Array.isArray(clipsMeta) || clipsMeta.length !== req.files.length) {
+    req.files.forEach((f) => cleanupFile(f.path));
+    return res.status(400).json({ error: 'Los datos de recorte no coinciden con los clips subidos.' });
+  }
+
+  const metaPreset = META_PRESETS[req.body.metaPreset] || META_PRESETS.reels;
+  const quality = req.body.quality || 'balanced';
+  const q = QUALITY_BITRATE[quality] || QUALITY_BITRATE.balanced;
+  const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.mp4';
+
+  const overlayText = (req.body.overlayText || '').trim().slice(0, 200);
+  const overlayEnabled = req.body.overlayEnabled === 'true' && overlayText.length > 0;
+  const overlayPosition = ['top', 'center', 'bottom'].includes(req.body.overlayPosition)
+    ? req.body.overlayPosition
+    : 'bottom';
+  const overlayColor = /^#?[0-9a-fA-F]{6}$/.test(req.body.overlayColor || '')
+    ? req.body.overlayColor.replace('#', '')
+    : 'FFFFFF';
+
+  const { width: W, height: H } = metaPreset;
+  const jobId = randomUUID();
+  const inputPaths = req.files.map((f) => f.path);
+  const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
+
+  jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
+  res.json({ jobId });
+
+  const clipFilterParts = [];
+  const concatRefs = [];
+  req.files.forEach((file, i) => {
+    const meta = clipsMeta[i] || {};
+    const start = Math.max(0, Number(meta.start) || 0);
+    const endRaw = Number(meta.end);
+    const end = endRaw > start ? endRaw : start + 1; // por si llega algo invalido, no rompe el proceso
+
+    const videoChain = buildBlurFitFilter(`[${i}:v]trim=start=${start}:end=${end},setpts=PTS-STARTPTS,`, W, H, `,setsar=1,fps=30[v${i}]`, `_${i}`);
+    clipFilterParts.push(videoChain);
+    clipFilterParts.push(
+      `[${i}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo[a${i}]`
+    );
+    concatRefs.push(`[v${i}][a${i}]`);
+  });
+
+  const concatFilter = `${concatRefs.join('')}concat=n=${req.files.length}:v=1:a=1[vcat][acat]`;
+
+  let textFilter;
+  if (overlayEnabled) {
+    const yExpr = overlayPosition === 'top' ? 'h*0.08' : overlayPosition === 'center' ? '(h-text_h)/2' : 'h*0.85';
+    const fontSize = Math.round(H * 0.055);
+    textFilter = `;[vcat]drawtext=font='${DRAWTEXT_FONT}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16[vout]`;
+  } else {
+    textFilter = ';[vcat]null[vout]';
+  }
+
+  const filterGraph = clipFilterParts.join(';') + ';' + concatFilter + textFilter;
+
+  const command = ffmpeg();
+  req.files.forEach((f) => command.input(f.path));
   command
-    .on('start', (cmdLine) => {
-      console.log(`[ffmpeg:${jobId}] start: ${cmdLine}`);
-      setJob(jobId, { status: 'processing' });
-    })
-    .on('stderr', (line) => {
-      stderrTail.push(line);
-      if (stderrTail.length > 40) stderrTail.shift();
-    })
-    .on('progress', (p) => {
-      setJob(jobId, { progress: Math.min(99, Math.round(p.percent || 0)) });
-    })
-    .on('error', (err) => {
-      clearTimeout(timeoutHandle);
-      if (jobs.get(jobId)?.status === 'cancelled') {
-        cleanupFile(inputPath);
-        return; // ya se informo al frontend, no pisar el mensaje
-      }
-      const message = killedForTimeout
-        ? 'El video tardó demasiado en procesarse y se canceló. Probá con un archivo más corto, más liviano, o con menor calidad.'
-        : err.message;
-      console.error(`[ffmpeg:${jobId}] ERROR: ${message}`);
-      if (!killedForTimeout) console.error(`[ffmpeg:${jobId}] last stderr:\n${stderrTail.join('\n')}`);
-      setJob(jobId, { status: 'error', error: message });
-      cleanupFile(inputPath);
-    })
-    .on('end', () => {
-      clearTimeout(timeoutHandle);
-      let outputSize = 0;
-      try { outputSize = fs.statSync(outputPath).size; } catch {}
-      setJob(jobId, { status: 'done', progress: 100, outputPath, outputSize });
-      cleanupFile(inputPath);
-    })
-    .save(outputPath);
+    .videoCodec('libx264')
+    .outputOptions([
+      `-crf ${q.crf}`,
+      `-preset ${q.preset}`,
+      `-maxrate ${q.maxrateMbps}M`,
+      `-bufsize ${q.maxrateMbps * 2}M`,
+      '-movflags +faststart',
+      '-pix_fmt yuv420p',
+      '-threads', '2',
+      '-x264-params', 'threads=2:lookahead_threads=1:sliced_threads=0',
+      '-filter_complex', filterGraph,
+      '-map', '[vout]',
+      '-map', '[acat]',
+      '-profile:v', 'main',
+      '-level', '4.0',
+    ])
+    .audioCodec('aac')
+    .audioBitrate('128k');
 
-  setJob(jobId, { command, inputPath });
+  runJob(jobId, command, inputPaths, outputPath);
 });
 
 app.get('/api/status/:jobId', requireAuthApi, (req, res) => {
@@ -434,7 +585,7 @@ app.post('/api/cancel/:jobId', requireAuthApi, (req, res) => {
   if (job.command) {
     try { job.command.kill('SIGKILL'); } catch {}
   }
-  if (job.inputPath) cleanupFile(job.inputPath);
+  if (job.inputPaths) job.inputPaths.forEach(cleanupFile);
   setJob(jobId, { status: 'cancelled', error: 'Cancelado por el usuario.' });
   res.json({ ok: true });
 });

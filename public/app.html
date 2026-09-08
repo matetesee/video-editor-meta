@@ -9,6 +9,11 @@
 <body>
   <div class="app">
     <div class="session-bar">
+      <label class="avatar-upload" id="avatarUpload" title="Cambiar foto de perfil">
+        <img id="avatarImg" src="" alt="" hidden>
+        <span id="avatarFallback">🧑</span>
+        <input type="file" id="avatarInput" accept="image/*" hidden>
+      </label>
       <span id="sessionUser"></span>
       <button id="logoutBtn" class="link-btn">Cerrar sesión</button>
     </div>
@@ -17,7 +22,13 @@
       <p class="subtitle">Subí tu video, rotalo, cambiá el codec de audio y descargalo optimizado.</p>
     </header>
 
+    <nav class="section-tabs">
+      <button type="button" class="section-tab active" data-section="optimizerSection">🎯 Optimizador Meta</button>
+      <button type="button" class="section-tab" data-section="editorSection">✂️ Mini Editor</button>
+    </nav>
+
     <main>
+      <div id="optimizerSection">
       <section class="panel" id="uploadPanel">
         <label class="dropzone" id="dropzone">
           <input type="file" id="fileInput" accept="video/*" hidden>
@@ -105,9 +116,93 @@
 
         <div class="error hidden" id="errorPanel"></div>
       </section>
+      </div>
+
+      <div id="editorSection" class="hidden">
+        <section class="panel" id="editorUploadPanel">
+          <label class="dropzone" id="editorDropzone">
+            <input type="file" id="editorFileInput" accept="video/*" multiple hidden>
+            <span>✂️ Arrastrá varios clips acá (o hacé click) — se unen en el orden que los subís</span>
+          </label>
+        </section>
+
+        <section class="panel hidden" id="editorEditPanel">
+          <div id="clipsList"></div>
+
+          <div class="panel meta-panel">
+            <label for="editorPreset">📱 Formato de salida</label>
+            <select id="editorPreset">
+              <option value="reels" selected>Reels / Stories (9:16 vertical)</option>
+              <option value="square">Feed cuadrado (1:1)</option>
+              <option value="feed_vertical">Feed vertical (4:5)</option>
+            </select>
+          </div>
+
+          <div class="panel meta-panel">
+            <label class="overlay-toggle-label">
+              <input type="checkbox" id="overlayEnabled"> 📝 Agregar texto quemado sobre el video
+            </label>
+            <div id="overlayControls" class="overlay-controls hidden">
+              <input type="text" id="overlayText" placeholder="Ej: 50% OFF hoy" maxlength="200">
+              <div class="overlay-row">
+                <select id="overlayPosition">
+                  <option value="top">Arriba</option>
+                  <option value="center">Centro</option>
+                  <option value="bottom" selected>Abajo</option>
+                </select>
+                <input type="color" id="overlayColor" value="#ffffff">
+              </div>
+            </div>
+          </div>
+
+          <div class="control-group title-group">
+            <label for="editorTitle">✏️ Título del video</label>
+            <input type="text" id="editorTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
+          </div>
+
+          <div class="controls">
+            <div class="control-group">
+              <label for="editorQuality">Calidad / tamaño</label>
+              <select id="editorQuality">
+                <option value="high">Alta calidad (archivo más pesado)</option>
+                <option value="balanced" selected>Balanceado (recomendado)</option>
+                <option value="small">Archivo liviano</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="editorExportBtn" class="btn-primary">🎬 Exportar video</button>
+            <button id="editorResetBtn" class="btn-secondary">Elegir otros clips</button>
+          </div>
+
+          <div class="progress-wrap hidden" id="editorProgressWrap">
+            <div class="progress-head">
+              <span id="editorProgressText">Subiendo...</span>
+              <span id="editorElapsedText">0s</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="editorProgressFill"></div></div>
+            <button id="editorCancelBtn" class="btn-ghost-cancel">✕ Cancelar</button>
+          </div>
+
+          <div class="result hidden" id="editorResultPanel">
+            <p>✅ ¡Listo! Tu video quedó exportado.</p>
+            <p class="result-meta" id="editorResultMeta"></p>
+            <a id="editorDownloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+          </div>
+
+          <div class="error hidden" id="editorErrorPanel"></div>
+        </section>
+      </div>
     </main>
+
+    <footer class="fun-footer">
+      Hecho con 🧉 por el equipo de Dematiu ·
+      <a href="https://instagram.com/mate.tesei" target="_blank" rel="noopener">📸 @mate.tesei</a>
+    </footer>
   </div>
 
   <script src="script.js"></script>
+  <script src="editor.js"></script>
 </body>
 </html>

@@ -18,6 +18,9 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // ALTER ... IF NOT EXISTS en vez de meterla en el CREATE TABLE de arriba:
+  // asi las cuentas que ya existian antes de esta columna no rompen nada.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data_url TEXT;`);
 }
 
 module.exports = { pool, initDb };

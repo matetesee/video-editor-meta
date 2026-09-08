@@ -25,6 +25,20 @@ const metaHint = document.getElementById('metaHint');
 const videoTitleInput = document.getElementById('videoTitle');
 const sessionUser = document.getElementById('sessionUser');
 const logoutBtn = document.getElementById('logoutBtn');
+const avatarImg = document.getElementById('avatarImg');
+const avatarFallback = document.getElementById('avatarFallback');
+const avatarInput = document.getElementById('avatarInput');
+
+function setAvatar(url) {
+  if (url) {
+    avatarImg.src = url;
+    avatarImg.hidden = false;
+    avatarFallback.hidden = true;
+  } else {
+    avatarImg.hidden = true;
+    avatarFallback.hidden = false;
+  }
+}
 
 (async function initSession() {
   try {
@@ -32,10 +46,28 @@ const logoutBtn = document.getElementById('logoutBtn');
     if (res.status === 401) return window.location.href = '/login';
     const data = await res.json();
     sessionUser.textContent = `👤 ${data.email}`;
+    setAvatar(data.avatarUrl);
   } catch (err) {
     // si falla la consulta, no bloqueamos el uso de la pagina
   }
 })();
+
+avatarInput.addEventListener('change', async () => {
+  const file = avatarInput.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('avatar', file);
+  try {
+    const res = await fetch('/api/me/avatar', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No se pudo actualizar la foto.');
+    setAvatar(data.avatarUrl);
+  } catch (err) {
+    alert('❌ ' + err.message);
+  } finally {
+    avatarInput.value = '';
+  }
+});
 
 logoutBtn.addEventListener('click', async () => {
   try {
@@ -267,6 +299,7 @@ function pollStatus(jobId) {
         progressWrap.classList.add('hidden');
         processBtn.disabled = false;
         processBtn.textContent = '⚙️ Procesar video';
+        if (window.fireConfetti) window.fireConfetti();
       } else if (data.status === 'cancelled') {
         stopTimers();
         showError(data.error || 'Proceso cancelado.');
@@ -291,3 +324,29 @@ function showError(msg) {
   processBtn.disabled = false;
   processBtn.textContent = '⚙️ Procesar video';
 }
+
+// ---- Navegación entre secciones (Optimizador / Mini Editor) ----
+document.querySelectorAll('.section-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    document.querySelectorAll('#optimizerSection, #editorSection').forEach((section) => {
+      section.classList.toggle('hidden', section.id !== tab.dataset.section);
+    });
+  });
+});
+
+// ---- Chiche: un puñado de emojis cayendo cuando algo termina bien ----
+window.fireConfetti = function fireConfetti() {
+  const emojis = ['🎉', '✨', '🎬', '🔥', '👏', '🚀'];
+  for (let i = 0; i < 18; i++) {
+    const el = document.createElement('div');
+    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    el.style.cssText = `
+      position: fixed; top: -30px; left: ${Math.random() * 100}vw;
+      font-size: ${16 + Math.random() * 16}px; z-index: 9999; pointer-events: none;
+      animation: confetti-fall ${1.6 + Math.random() * 1.2}s ease-in forwards;
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+};
