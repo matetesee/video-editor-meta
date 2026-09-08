@@ -23,6 +23,28 @@ const qualitySel = document.getElementById('quality');
 const metaPresetSel = document.getElementById('metaPreset');
 const metaHint = document.getElementById('metaHint');
 const videoTitleInput = document.getElementById('videoTitle');
+const sessionUser = document.getElementById('sessionUser');
+const logoutBtn = document.getElementById('logoutBtn');
+
+(async function initSession() {
+  try {
+    const res = await fetch('/api/me');
+    if (res.status === 401) return window.location.href = '/login';
+    const data = await res.json();
+    sessionUser.textContent = `👤 ${data.username}`;
+  } catch (err) {
+    // si falla la consulta, no bloqueamos el uso de la pagina
+  }
+})();
+
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+  } catch (err) {
+    // igual redirigimos
+  }
+  window.location.href = '/login';
+});
 
 const META_HINTS = {
   reels: 'Se ajusta automáticamente a 1080x1920 (9:16), códec H.264 + AAC 48kHz y bitrate dentro de lo que pide Meta para Reels/Stories. El contenido se centra sobre un fondo relleno, sin recortarlo.',
@@ -184,6 +206,7 @@ processBtn.addEventListener('click', async () => {
 
   try {
     const res = await fetch('/api/process', { method: 'POST', body: formData });
+    if (res.status === 401) return window.location.href = '/login';
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al procesar el video.');
 
@@ -220,6 +243,7 @@ function pollStatus(jobId) {
   pollTimer = setInterval(async () => {
     try {
       const res = await fetch(`/api/status/${jobId}`);
+      if (res.status === 401) { stopTimers(); return window.location.href = '/login'; }
       const data = await res.json();
 
       if (data.status === 'analyzing') {

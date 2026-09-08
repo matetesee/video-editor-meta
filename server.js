@@ -1,12 +1,15 @@
 const express = require('express');
+const session = require('express-session');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { randomUUID } = require('crypto');
+const crypto = require('crypto');
+const { randomUUID } = crypto;
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const ffprobePath = require('@ffprobe-installer/ffprobe').path;
+const { verifyPassword, requireAuthPage, requireAuthApi } = require('./auth');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
@@ -22,8 +25,56 @@ const upload = multer({
   limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB max
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Railway sirve HTTPS desde su proxy: hay que confiar en el header
+// X-Forwarded-Proto para que la cookie "secure" funcione bien.
+app.set('trust proxy', 1);
+
 app.use(express.json());
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
+    cookie: {
+      httpOnly: true,
+      secure: !!process.env.RAILWAY_ENVIRONMENT,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+    },
+  })
+);
+
+// login.html, script.js, style.css, etc. quedan accesibles sin sesion (no
+// tienen nada sensible); app.html NO esta en esta carpeta con ese nombre
+// "index" para que no se sirva solo con /: se manda explicitamente mas
+// abajo, ya protegido por requireAuthPage.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (!verifyPassword(username, password)) {
+    return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+  }
+  req.session.username = String(username).trim();
+  res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get('/api/me', requireAuthApi, (req, res) => {
+  res.json({ username: req.session.username });
+});
+
+app.get('/login', (req, res) => {
+  if (req.session && req.session.username) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/', requireAuthPage, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'app.html'));
+});
 
 // Jobs en memoria (instancia unica - MVP).
 const jobs = new Map();
@@ -123,7 +174,7 @@ function sanitizeFilename(title) {
   return cleaned || 'video-editado';
 }
 
-app.post('/api/process', upload.single('video'), async (req, res) => {
+app.post('/api/process', requireAuthApi, upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
 
   const rotation = parseInt(req.body.rotation || '0', 10);
@@ -286,7 +337,7 @@ app.post('/api/process', upload.single('video'), async (req, res) => {
   setJob(jobId, { command, inputPath });
 });
 
-app.get('/api/status/:jobId', (req, res) => {
+app.get('/api/status/:jobId', requireAuthApi, (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: 'Job no encontrado.' });
   res.json({
@@ -297,7 +348,7 @@ app.get('/api/status/:jobId', (req, res) => {
   });
 });
 
-app.post('/api/cancel/:jobId', (req, res) => {
+app.post('/api/cancel/:jobId', requireAuthApi, (req, res) => {
   const jobId = req.params.jobId;
   const job = jobs.get(jobId);
   if (!job) return res.status(404).json({ error: 'Job no encontrado.' });
@@ -309,7 +360,7 @@ app.post('/api/cancel/:jobId', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/download/:jobId', (req, res) => {
+app.get('/api/download/:jobId', requireAuthApi, (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job || job.status !== 'done') return res.status(404).json({ error: 'No disponible todavia.' });
   res.download(job.outputPath, job.downloadName || 'video-editado.mp4', (err) => {
