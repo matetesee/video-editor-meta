@@ -3,4 +3,4 @@
 # (usado por el mini editor para quemar texto sobre el video) siempre
 # encuentre una tipografia via fontconfig, sin depender de que el usuario
 # suba nada.
-aptPkgs = ["fonts-dejavu-core"]
+aptPkgs = ["fontconfig", "fonts-dejavu-core"]

@@ -323,10 +323,13 @@ const QUALITY_BITRATE = {
 // calidad visible.
 const MAX_WORK_DIMENSION = 1920;
 
-// Tipografia para el texto quemado del mini editor. La instala el propio
-// contenedor via apt (ver nixpacks.toml) asi drawtext siempre la encuentra,
-// sin depender de que el usuario suba nada ni de si el SO base trae fuentes.
-const DRAWTEXT_FONT = 'DejaVu Sans';
+// Tipografia para el texto quemado del mini editor. Se apunta directo al
+// archivo .ttf (via "fontfile", no "font") para no depender de fontconfig:
+// el contenedor de nixpacks no siempre trae /etc/fonts/fonts.conf armado
+// aunque el paquete de la fuente si este instalado (ver nixpacks.toml), y
+// buscar la fuente por nombre de familia fallaba con "Cannot load default
+// config file" en ese caso.
+const DRAWTEXT_FONT_FILE = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
 
 function escapeDrawtext(text) {
   return String(text)
@@ -535,7 +538,7 @@ app.post('/api/edit', requireAuthApi, upload.array('clips', 20), async (req, res
   if (overlayEnabled) {
     const yExpr = overlayPosition === 'top' ? 'h*0.08' : overlayPosition === 'center' ? '(h-text_h)/2' : 'h*0.85';
     const fontSize = Math.round(H * 0.055);
-    textFilter = `;[vcat]drawtext=font='${DRAWTEXT_FONT}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16[vout]`;
+    textFilter = `;[vcat]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16[vout]`;
   } else {
     textFilter = ';[vcat]null[vout]';
   }
