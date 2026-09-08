@@ -1,5 +1,8 @@
 const express = require('express');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -9,7 +12,9 @@ const { randomUUID } = crypto;
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const ffprobePath = require('@ffprobe-installer/ffprobe').path;
-const { verifyPassword, requireAuthPage, requireAuthApi } = require('./auth');
+const { pool, initDb } = require('./db');
+const { createUser, findByEmail, verifyPassword, linkOrCreateGoogleUser } = require('./users');
+const { requireAuthPage, requireAuthApi } = require('./auth');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
@@ -25,6 +30,36 @@ const upload = multer({
   limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB max
 });
 
+const GOOGLE_ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+const PUBLIC_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : `http://localhost:${PORT}`;
+
+if (GOOGLE_ENABLED) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: `${PUBLIC_URL}/auth/google/callback`,
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const email = profile.emails && profile.emails[0] && profile.emails[0].value;
+          const user = await linkOrCreateGoogleUser({
+            googleId: profile.id,
+            email,
+            displayName: profile.displayName,
+          });
+          done(null, user);
+        } catch (err) {
+          done(err);
+        }
+      }
+    )
+  );
+}
+
 // Railway sirve HTTPS desde su proxy: hay que confiar en el header
 // X-Forwarded-Proto para que la cookie "secure" funcione bien.
 app.set('trust proxy', 1);
@@ -32,6 +67,9 @@ app.set('trust proxy', 1);
 app.use(express.json());
 app.use(
   session({
+    // Las sesiones se guardan en Postgres (no en memoria): sobreviven a
+    // los redeploys, y no se pierden si hay mas de una instancia corriendo.
+    store: new pgSession({ pool, createTableIfMissing: true }),
     secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
     resave: false,
     saveUninitialized: false,
@@ -39,10 +77,11 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: !!process.env.RAILWAY_ENVIRONMENT,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 dias
     },
   })
 );
+app.use(passport.initialize());
 
 // login.html, script.js, style.css, etc. quedan accesibles sin sesion (no
 // tienen nada sensible); app.html NO esta en esta carpeta con ese nombre
@@ -50,13 +89,41 @@ app.use(
 // abajo, ya protegido por requireAuthPage.
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body || {};
-  if (!verifyPassword(username, password)) {
-    return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+app.get('/api/auth-config', (req, res) => {
+  res.json({ googleEnabled: GOOGLE_ENABLED });
+});
+
+app.post('/api/register', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Ingresá un email válido.' });
   }
-  req.session.username = String(username).trim();
-  res.json({ ok: true });
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'La contraseña tiene que tener al menos 8 caracteres.' });
+  }
+  try {
+    const existing = await findByEmail(email);
+    if (existing) return res.status(409).json({ error: 'Ya existe una cuenta con ese email.' });
+    const user = await createUser(email, password);
+    req.session.user = { id: user.id, email: user.email };
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[register]', err.message);
+    res.status(500).json({ error: 'No se pudo crear la cuenta. Probá de nuevo.' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body || {};
+  try {
+    const user = await verifyPassword(email, password);
+    if (!user) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+    req.session.user = { id: user.id, email: user.email };
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[login]', err.message);
+    res.status(500).json({ error: 'No se pudo iniciar sesión. Probá de nuevo.' });
+  }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -64,11 +131,23 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', requireAuthApi, (req, res) => {
-  res.json({ username: req.session.username });
+  res.json({ email: req.session.user.email });
 });
 
+if (GOOGLE_ENABLED) {
+  app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+  app.get(
+    '/auth/google/callback',
+    passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+    (req, res) => {
+      req.session.user = { id: req.user.id, email: req.user.email };
+      res.redirect('/');
+    }
+  );
+}
+
 app.get('/login', (req, res) => {
-  if (req.session && req.session.username) return res.redirect('/');
+  if (req.session && req.session.user) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
@@ -373,6 +452,13 @@ app.get('/api/download/:jobId', requireAuthApi, (req, res) => {
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => {
-  console.log(`Video editor corriendo en puerto ${PORT}`);
-});
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Video editor corriendo en puerto ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('No se pudo inicializar la base de datos:', err.message);
+    process.exit(1);
+  });

@@ -31,7 +31,7 @@ const logoutBtn = document.getElementById('logoutBtn');
     const res = await fetch('/api/me');
     if (res.status === 401) return window.location.href = '/login';
     const data = await res.json();
-    sessionUser.textContent = `👤 ${data.username}`;
+    sessionUser.textContent = `👤 ${data.email}`;
   } catch (err) {
     // si falla la consulta, no bloqueamos el uso de la pagina
   }
