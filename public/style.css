@@ -79,6 +79,31 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   margin: 10px 0 20px;
 }
 
+.title-group {
+  margin-bottom: 20px;
+}
+.title-group label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: block;
+  margin-bottom: 8px;
+}
+#videoTitle {
+  width: 100%;
+  background: #1f2330;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 0.95rem;
+}
+#videoTitle:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .meta-panel {
   border-color: rgba(108, 92, 231, 0.4);
   background: rgba(108, 92, 231, 0.06);

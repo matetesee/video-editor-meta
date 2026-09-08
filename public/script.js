@@ -22,6 +22,7 @@ const audioBitrateSel = document.getElementById('audioBitrate');
 const qualitySel = document.getElementById('quality');
 const metaPresetSel = document.getElementById('metaPreset');
 const metaHint = document.getElementById('metaHint');
+const videoTitleInput = document.getElementById('videoTitle');
 
 const META_HINTS = {
   reels: 'Se ajusta automáticamente a 1080x1920 (9:16), códec H.264 + AAC 48kHz y bitrate dentro de lo que pide Meta para Reels/Stories. El contenido se centra sobre un fondo relleno, sin recortarlo.',
@@ -92,6 +93,7 @@ function resetAll() {
   previewVideo.src = '';
   previewVideo.style.transform = 'none';
   fileInfo.textContent = '';
+  videoTitleInput.value = '';
   editPanel.classList.add('hidden');
   uploadPanel.classList.remove('hidden');
   progressWrap.classList.add('hidden');
@@ -113,6 +115,8 @@ function loadFile(file) {
   currentFile = file;
   rotation = 0;
   rotationLabel.textContent = '0°';
+  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+  videoTitleInput.value = nameWithoutExt;
   const url = URL.createObjectURL(file);
   previewVideo.src = url;
   previewVideo.onloadedmetadata = () => {
@@ -176,6 +180,7 @@ processBtn.addEventListener('click', async () => {
   formData.append('audioBitrate', audioBitrateSel.value);
   formData.append('quality', qualitySel.value);
   formData.append('metaPreset', metaPresetSel.value);
+  formData.append('title', videoTitleInput.value.trim());
 
   try {
     const res = await fetch('/api/process', { method: 'POST', body: formData });

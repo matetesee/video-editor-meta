@@ -110,6 +110,19 @@ const QUALITY_BITRATE = {
 // calidad visible.
 const MAX_WORK_DIMENSION = 1920;
 
+// Caracteres invalidos como nombre de archivo en Windows/Mac/Linux. No se
+// tocan espacios, guiones ni acentos: esos son validos en cualquier SO.
+const INVALID_FILENAME_CHARS = /[\\/:*?"<>|]/g;
+
+// Convierte el titulo que puso el usuario en un nombre de archivo valido.
+function sanitizeFilename(title) {
+  const cleaned = (title || '')
+    .replace(INVALID_FILENAME_CHARS, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || 'video-editado';
+}
+
 app.post('/api/process', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
 
@@ -118,6 +131,7 @@ app.post('/api/process', upload.single('video'), async (req, res) => {
   const audioBitrate = req.body.audioBitrate || '128k';
   const quality = req.body.quality || 'balanced';
   const metaPresetKey = req.body.metaPreset || 'none';
+  const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.mp4';
 
   const audioCfg = AUDIO_CODECS[audioCodecKey] || AUDIO_CODECS.aac;
   const metaPreset = META_PRESETS[metaPresetKey] || null;
@@ -127,7 +141,7 @@ app.post('/api/process', upload.single('video'), async (req, res) => {
   const inputPath = req.file.path;
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
 
-  jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now() });
+  jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
   // Responder ya: el analisis y la codificacion siguen en background y el
   // frontend hace polling de /api/status. Asi la subida no se siente trabada
   // esperando a que termine TODO el proceso.
@@ -298,7 +312,7 @@ app.post('/api/cancel/:jobId', (req, res) => {
 app.get('/api/download/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job || job.status !== 'done') return res.status(404).json({ error: 'No disponible todavia.' });
-  res.download(job.outputPath, 'video-editado.mp4', (err) => {
+  res.download(job.outputPath, job.downloadName || 'video-editado.mp4', (err) => {
     if (!err) {
       cleanupFile(job.outputPath);
       jobs.delete(req.params.jobId);

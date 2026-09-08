@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Editor de Video - Meta Ads</title>
+<title>Editor de Video de Dematiu Para Meta</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>🎬 Editor de Video para Meta</h1>
+      <h1>🎬 Editor de Video de Dematiu Para Meta</h1>
       <p class="subtitle">Subí tu video, rotalo, cambiá el codec de audio y descargalo optimizado.</p>
     </header>
 
@@ -26,6 +26,11 @@
           <video id="previewVideo" controls></video>
         </div>
         <div class="file-info" id="fileInfo"></div>
+
+        <div class="control-group title-group">
+          <label for="videoTitle">✏️ Título del video</label>
+          <input type="text" id="videoTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
+        </div>
 
         <div class="panel meta-panel">
           <label for="metaPreset">📱 Formato para Meta Ads</label>
