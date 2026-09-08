@@ -323,13 +323,11 @@ const QUALITY_BITRATE = {
 // calidad visible.
 const MAX_WORK_DIMENSION = 1920;
 
-// Tipografia para el texto quemado del mini editor. Se apunta directo al
-// archivo .ttf (via "fontfile", no "font") para no depender de fontconfig:
-// el contenedor de nixpacks no siempre trae /etc/fonts/fonts.conf armado
-// aunque el paquete de la fuente si este instalado (ver nixpacks.toml), y
-// buscar la fuente por nombre de familia fallaba con "Cannot load default
-// config file" en ese caso.
-const DRAWTEXT_FONT_FILE = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+// Tipografia para el texto quemado del mini editor. Viene empaquetada en el
+// propio repo (fonts/DejaVuSans-Bold.ttf) y se referencia directo por
+// archivo (via "fontfile", no "font"): asi no depende de fontconfig ni de
+// que el contenedor tenga alguna fuente de sistema instalada.
+const DRAWTEXT_FONT_FILE = path.join(__dirname, 'fonts', 'DejaVuSans-Bold.ttf');
 
 function escapeDrawtext(text) {
   return String(text)
