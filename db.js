@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 // En Railway la conexion a Postgres va por su red privada; el certificado
 // no es de una CA publica, asi que hay que aceptar el self-signed.
@@ -6,6 +7,35 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.RAILWAY_ENVIRONMENT ? { rejectUnauthorized: false } : false,
 });
+
+// Duplicado a proposito de generateReferralCode() en users.js: si lo
+// importaramos de alla se armaria una dependencia circular (users.js ya
+// importa el pool desde aca). Es una funcion chiquita, no vale la pena
+// reorganizar los modulos solo por esto.
+function generateReferralCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  const bytes = crypto.randomBytes(8);
+  for (let i = 0; i < 8; i++) code += alphabet[bytes[i] % alphabet.length];
+  return code;
+}
+
+// Las cuentas creadas antes de que existiera la columna referral_code se
+// quedan con NULL (el ALTER TABLE no rellena datos existentes); esto les
+// asigna un codigo la primera vez que el server arranca despues del cambio.
+async function backfillReferralCodes() {
+  const { rows } = await pool.query('SELECT id FROM users WHERE referral_code IS NULL');
+  for (const row of rows) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await pool.query('UPDATE users SET referral_code = $1 WHERE id = $2', [generateReferralCode(), row.id]);
+        break;
+      } catch (err) {
+        if (attempt === 4) console.error(`[backfill-referral] no se pudo asignar codigo al usuario ${row.id}:`, err.message);
+      }
+    }
+  }
+}
 
 async function initDb() {
   await pool.query(`
@@ -101,6 +131,8 @@ async function initDb() {
       ('equipo', 'unlimited_permanent', 0, 10, 'Cupón interno para el equipo (hasta 10 personas)')
     ON CONFLICT (code) DO NOTHING;
   `);
+
+  await backfillReferralCodes();
 }
 
 module.exports = { pool, initDb };
