@@ -21,7 +21,12 @@ const {
   linkOrCreateGoogleUser,
   setAvatar,
   getQuotaStatus,
-  consumeQuota,
+  consumeQuotaOnSuccess,
+  PLANS,
+  PLAN_ORDER,
+  getPlanInfo,
+  requestPlanUpgrade,
+  adminSetPlan,
   applyCoupon,
   createResetToken,
   findByValidResetToken,
@@ -224,6 +229,61 @@ app.post('/api/coupon', requireAuthApi, async (req, res) => {
   }
 });
 
+// Catalogo de planes (publico: lo usa tanto la pagina de precios como el
+// modal de "llegaste al limite", este ultimo ya autenticado pero no hace
+// falta requireAuthApi para pedir precios). El backend es la unica fuente
+// de verdad: si el dia de mañana cambian precios/limites, se edita PLANS en
+// users.js y toda la UI (precios.html, el modal de limite, "Mi plan") se
+// actualiza sola.
+app.get('/api/plans', (req, res) => {
+  res.json({ plans: PLAN_ORDER.map((k) => PLANS[k]) });
+});
+
+// El usuario eligio un plan pago desde la pagina de precios. Todavia no hay
+// pasarela de pago conectada (ver nota en requestPlanUpgrade, users.js):
+// esto NO activa el plan, solo deja constancia del interes para que un
+// admin lo confirme a mano desde /admin una vez que reciba el pago.
+app.post('/api/plan/upgrade-request', requireAuthApi, async (req, res) => {
+  try {
+    const result = await requestPlanUpgrade(req.session.user.id, req.body && req.body.plan);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true, message: result.message });
+  } catch (err) {
+    console.error('[plan-upgrade-request]', err.message);
+    res.status(500).json({ error: 'No se pudo registrar tu pedido. Probá de nuevo.' });
+  }
+});
+
+// Volver al plan Gratis es siempre autoservicio e inmediato (no hay pago
+// de por medio, asi que no necesita confirmacion de un admin).
+app.post('/api/plan/downgrade-free', requireAuthApi, async (req, res) => {
+  try {
+    const result = await adminSetPlan(req.session.user.id, 'free');
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[plan-downgrade]', err.message);
+    res.status(500).json({ error: 'No se pudo cambiar el plan.' });
+  }
+});
+
+// Admin: activa (o quita) un plan de verdad para una cuenta. Hoy es manual;
+// el dia que se conecte Stripe/Mercado Pago, su webhook deberia llamar a
+// adminSetPlan directamente en vez de necesitar este endpoint a mano.
+app.post('/api/admin/users/:id/set-plan', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    const target = await findById(targetId);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    const result = await adminSetPlan(targetId, req.body && req.body.plan);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/set-plan]', err.message);
+    res.status(500).json({ error: 'No se pudo cambiar el plan.' });
+  }
+});
+
 app.post('/api/me/avatar', requireAuthApi, upload.single('avatar'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
   const inputPath = req.file.path;
@@ -264,6 +324,13 @@ if (GOOGLE_ENABLED) {
 app.get('/login', (req, res) => {
   if (req.session && req.session.user) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Publica a proposito (sin requireAuthPage): sirve tanto de landing de
+// precios para gente sin cuenta todavia como de "cambiar plan" para quien
+// ya esta logueado (precios.js se adapta segun haya sesion o no).
+app.get('/precios', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'precios.html'));
 });
 
 app.post('/api/forgot-password', async (req, res) => {
@@ -476,6 +543,10 @@ function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
           filePath: outputPath,
         }).catch((err) => console.error(`[history:${jobId}]`, err.message));
         recordVideoCompletion(userId).catch((err) => console.error(`[streak:${jobId}]`, err.message));
+        // El cupo se descuenta recien aca (job terminado con exito), no al
+        // subir el archivo: asi cancelar o que falle el proceso no gasta un
+        // uso del plan (ver requireQuota mas arriba).
+        consumeQuotaOnSuccess(userId).catch((err) => console.error(`[quota:${jobId}]`, err.message));
       }
     })
     .save(outputPath);
@@ -595,17 +666,22 @@ function buildBlurFitFilter(srcLabel, W, H, extraSuffix, uid) {
   );
 }
 
-// Se corre ANTES de multer para no gastar ancho de banda/tiempo subiendo un
-// archivo si la persona ya se quedó sin cupo hoy. Consume 1 uso apenas se
-// acepta el envío (no cuando termina de procesar): asi "cargar un video"
-// cuenta como 1 uso tanto para el optimizador como para el mini editor.
+// Se corre ANTES de multer, para no gastar ancho de banda/tiempo subiendo un
+// archivo si la persona ya se quedó sin cupo hoy. Solo VERIFICA que quede
+// cupo, no descuenta nada todavia — el descuento real pasa recien cuando el
+// video termina de procesarse bien (ver consumeQuotaOnSuccess en el 'end'
+// de runJob), asi que subir un archivo y despues cancelarlo, o que el
+// procesamiento falle, no gastan un uso.
 async function requireQuota(req, res, next) {
   try {
-    const result = await consumeQuota(req.session.user.id);
-    if (!result.allowed) {
+    const quota = await getQuotaStatus(req.session.user.id);
+    if (!quota) return res.status(500).json({ error: 'No se pudo verificar tu cuota. Probá de nuevo.' });
+    if (!quota.unlimited && quota.remaining <= 0) {
+      const upsell = PLAN_ORDER.filter((k) => k !== 'free' && k !== quota.plan).map((k) => PLANS[k]);
       return res.status(429).json({
-        error: `Ya usaste tus ${result.limit} videos gratis de hoy. Se resetea a la medianoche, o activá el plan ilimitado con un cupón en ⚙️ Configuración.`,
-        quota: result,
+        error: `Ya usaste tus ${quota.limit} videos de hoy con el plan ${quota.planName}. Se resetea a la medianoche, o mejorá tu plan para seguir creando.`,
+        quota,
+        upsell,
       });
     }
     next();

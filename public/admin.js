@@ -7,12 +7,18 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('es-AR');
 }
 
+const PLAN_LABELS = { free: 'Gratis', intermedio: 'Intermedio', pro: 'Pro' };
+
 function planLabel(user) {
-  if (user.unlimited) return '✨ Ilimitado';
+  const base = PLAN_LABELS[user.plan] || user.plan;
+  // El cupon de ilimitado (equipo) pisa cualquier plan formal, igual que en
+  // el resto de la app — se muestra aparte para no confundirlo con el plan
+  // Pro pago.
+  if (user.unlimited) return `${base} + 🎟️✨ ilimitado (cupón)`;
   if (user.unlimited_until && new Date(user.unlimited_until).getTime() > Date.now()) {
-    return `✨ Hasta ${fmtDate(user.unlimited_until)}`;
+    return `${base} + 🎟️✨ hasta ${fmtDate(user.unlimited_until)}`;
   }
-  return 'Gratis (3/día)';
+  return base;
 }
 
 async function loadStats() {
@@ -24,7 +30,11 @@ async function loadStats() {
   const s = await res.json();
   const cards = [
     { label: 'Usuarios totales', value: s.totalUsers },
-    { label: 'Con plan ilimitado', value: s.unlimitedUsers },
+    { label: 'Plan Gratis', value: (s.planCounts && s.planCounts.free) || 0 },
+    { label: 'Plan Intermedio', value: (s.planCounts && s.planCounts.intermedio) || 0 },
+    { label: 'Plan Pro', value: (s.planCounts && s.planCounts.pro) || 0 },
+    { label: 'Pedidos de upgrade pendientes', value: s.pendingUpgrades || 0 },
+    { label: 'Con cupón ilimitado', value: s.unlimitedUsers },
     { label: 'Videos hoy', value: s.videosToday },
     { label: 'Videos en historial (24h)', value: s.videosInHistory },
     { label: 'Referidos totales', value: s.totalReferrals },
@@ -48,6 +58,17 @@ async function loadUsers() {
         <td>${u.bonus_uses}</td>
         <td><code>${u.referral_code || '—'}</code></td>
         <td>${u.referrals_made}</td>
+        <td>
+          ${u.requested_plan ? `<div style="margin-bottom:6px;font-size:0.72rem;color:var(--accent-hover);">Pidió: ${PLAN_LABELS[u.requested_plan] || u.requested_plan}</div>` : ''}
+          <div style="display:flex;gap:6px;">
+            <select class="plan-select" data-id="${u.id}" data-email="${u.email}">
+              <option value="free" ${u.plan === 'free' ? 'selected' : ''}>Gratis</option>
+              <option value="intermedio" ${u.plan === 'intermedio' || u.requested_plan === 'intermedio' ? 'selected' : ''}>Intermedio</option>
+              <option value="pro" ${u.plan === 'pro' || u.requested_plan === 'pro' ? 'selected' : ''}>Pro</option>
+            </select>
+            <button type="button" class="btn-secondary set-plan-btn" data-id="${u.id}" data-email="${u.email}">Guardar</button>
+          </div>
+        </td>
         <td><button type="button" class="btn-secondary impersonate-btn" data-id="${u.id}" data-email="${u.email}">🔎 Entrar</button></td>
         <td><button type="button" class="btn-secondary revoke-btn" data-id="${u.id}" data-email="${u.email}">🎟️❌ Quitar plan</button></td>
         <td><button type="button" class="btn-danger delete-btn" data-id="${u.id}" data-email="${u.email}">🗑️ Eliminar</button></td>
@@ -70,6 +91,33 @@ async function loadUsers() {
         alert('❌ ' + err.message);
         btn.disabled = false;
         btn.textContent = '🔎 Entrar';
+      }
+    });
+  });
+
+  usersBody.querySelectorAll('.set-plan-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('td');
+      const select = row.querySelector('.plan-select');
+      const plan = select.value;
+      const email = btn.dataset.email;
+      if (!confirm(`¿Poner a ${email} en el plan ${PLAN_LABELS[plan]}?`)) return;
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const r = await fetch(`/api/admin/users/${btn.dataset.id}/set-plan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo cambiar el plan.');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        alert('❌ ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Guardar';
       }
     });
   });

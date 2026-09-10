@@ -62,3 +62,64 @@ window.notifyVideoReady = function notifyVideoReady(body) {
     // algunos navegadores/entornos bloquean Notification silenciosamente
   }
 };
+
+// ---- Modal de "llegaste a tu límite diario" ----
+// Lo dispara cualquier fetch a /api/process, /api/edit o /api/extract-audio
+// que devuelva 429 (requireQuota en server.js). data = { error, quota,
+// upsell } tal cual lo manda el servidor; upsell es la lista de planes
+// (de users.js PLANS) que tiene sentido ofrecerle a esta cuenta.
+window.showLimitModal = function showLimitModal(data) {
+  const overlay = document.getElementById('limitModalOverlay');
+  if (!overlay) return; // pagina que no tiene el modal (no deberia pasar en la app)
+  const messageEl = document.getElementById('limitModalMessage');
+  const plansEl = document.getElementById('limitModalPlans');
+  if (messageEl) messageEl.textContent = (data && data.error) || 'Alcanzaste tu límite diario.';
+
+  const upsell = (data && data.upsell) || [];
+  if (plansEl) {
+    plansEl.innerHTML = upsell
+      .map(
+        (p) => `
+        <div class="mini-plan-card${p.key === 'pro' ? ' highlight' : ''}">
+          ${p.tagline ? `<div class="pricing-tag" style="position:static;transform:none;display:inline-block;margin-bottom:8px;">${p.tagline}</div>` : ''}
+          <h4>${p.name}</h4>
+          <div class="mini-plan-price">$${p.priceUsd.toFixed(2).replace(/\.00$/, '')}<span style="font-size:0.65rem;color:var(--text-dim);"> USD/mes</span></div>
+          <button type="button" class="btn-primary" data-upgrade-plan="${p.key}">${p.cta}</button>
+        </div>`
+      )
+      .join('');
+    plansEl.querySelectorAll('[data-upgrade-plan]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Enviando...';
+        try {
+          const res = await fetch('/api/plan/upgrade-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan: btn.dataset.upgradePlan }),
+          });
+          const resData = await res.json();
+          if (!res.ok) throw new Error(resData.error || 'No se pudo registrar tu pedido.');
+          btn.textContent = '✅ Pedido enviado';
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = original;
+          alert('❌ ' + err.message);
+        }
+      });
+    });
+  }
+  overlay.classList.remove('hidden');
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const closeBtn = document.getElementById('limitModalCloseBtn');
+  const overlay = document.getElementById('limitModalOverlay');
+  if (closeBtn && overlay) {
+    closeBtn.addEventListener('click', () => overlay.classList.add('hidden'));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.classList.add('hidden');
+    });
+  }
+});

@@ -68,6 +68,17 @@ async function initDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;`);
 
+  // Planes y suscripciones: "plan" es 'free' | 'intermedio' | 'pro' (ver
+  // PLANS en users.js, que es la fuente de verdad de precios/limites).
+  // requested_plan/requested_plan_at quedan seteados cuando alguien elige
+  // un plan pago desde la pagina de precios pero TODAVIA no hay pasarela de
+  // pago conectada: es un "quiero esto" que un admin confirma a mano (ver
+  // adminSetPlan) hasta que se integre Stripe/Mercado Pago de verdad.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS requested_plan TEXT;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS requested_plan_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_updated_at TIMESTAMPTZ NOT NULL DEFAULT now();`);
+
   // Gamificacion: total_videos cuenta todos los videos procesados alguna vez
   // (no se resetea nunca, a diferencia de daily_count); streak_count/
   // last_active_date llevan la racha de dias consecutivos usando la app

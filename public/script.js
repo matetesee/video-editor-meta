@@ -33,7 +33,12 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsOverlay = document.getElementById('settingsOverlay');
 const settingsCloseBtn = document.getElementById('settingsCloseBtn');
 const settingsEmail = document.getElementById('settingsEmail');
-const settingsQuota = document.getElementById('settingsQuota');
+const planSummary = document.getElementById('planSummary');
+const planUsageBarWrap = document.getElementById('planUsageBarWrap');
+const planUsageBar = document.getElementById('planUsageBar');
+const planUsageText = document.getElementById('planUsageText');
+const manageSubBtn = document.getElementById('manageSubBtn');
+const manageSubNote = document.getElementById('manageSubNote');
 const couponBox = document.getElementById('couponBox');
 const couponInput = document.getElementById('couponInput');
 const couponApplyBtn = document.getElementById('couponApplyBtn');
@@ -56,6 +61,7 @@ const impersonationEmail = document.getElementById('impersonationEmail');
 const stopImpersonateBtn = document.getElementById('stopImpersonateBtn');
 
 let currentEmail = '';
+let planCatalog = {}; // { free: {...}, intermedio: {...}, pro: {...} } — via /api/plans
 
 function setAvatar(url) {
   if (url) {
@@ -68,24 +74,58 @@ function setAvatar(url) {
   }
 }
 
+function fmtPlanPrice(usd) {
+  if (!usd) return 'Gratis';
+  return `$${usd.toFixed(2).replace(/\.00$/, '')} USD/mes`;
+}
+
 function renderQuota(quota) {
   if (!quota) {
     quotaPill.textContent = '';
     quotaPill.className = 'quota-pill hidden';
-    settingsQuota.textContent = '';
+    if (planSummary) planSummary.textContent = '';
     return;
   }
+  const planInfo = planCatalog[quota.plan];
+  const priceLabel = planInfo ? fmtPlanPrice(planInfo.priceUsd) : '';
+  const isPaid = quota.plan && quota.plan !== 'free';
+
   if (quota.unlimited) {
     quotaPill.textContent = '✨ Ilimitado';
     quotaPill.className = 'quota-pill unlimited';
-    settingsQuota.textContent = quota.until
-      ? `✨ Ilimitado hasta ${new Date(quota.until).toLocaleDateString('es-AR')}`
-      : '✨ Plan ilimitado';
+    if (planSummary) {
+      // Si el plan formal ya es pago (Pro) se muestra ese; si el ilimitado
+      // viene solo de un cupón (plan sigue siendo Gratis), se aclara aparte
+      // para no confundirlo con haber pagado el plan Pro.
+      const base = isPaid ? `Plan ${quota.planName}${priceLabel ? ' — ' + priceLabel : ''}` : '✨ Cupón activo';
+      planSummary.textContent = base + (quota.until ? ` (ilimitado hasta ${new Date(quota.until).toLocaleDateString('es-AR')})` : ' — carga ilimitada');
+    }
+    if (planUsageBarWrap) planUsageBarWrap.classList.add('hidden');
+    if (planUsageText) planUsageText.textContent = 'Videos ilimitados. Sin límite diario.';
   } else {
     quotaPill.textContent = `${quota.remaining}/${quota.limit} hoy`;
     quotaPill.className = 'quota-pill' + (quota.remaining === 0 ? ' low' : '');
-    settingsQuota.textContent = `${quota.used} de ${quota.limit} videos usados hoy` + (quota.bonus > 0 ? ` (+${quota.bonus} extra)` : '') + ' (se resetea a medianoche)';
+    if (planSummary) planSummary.textContent = `Plan ${quota.planName || 'Gratis'} — ${priceLabel}`;
+    if (planUsageBarWrap) {
+      planUsageBarWrap.classList.remove('hidden');
+      const pct = Math.min(100, Math.round((quota.used / quota.limit) * 100));
+      planUsageBar.style.width = pct + '%';
+      planUsageBar.classList.toggle('low', quota.used >= quota.limit);
+    }
+    if (planUsageText) {
+      planUsageText.textContent =
+        `${quota.used} de ${quota.limit} videos usados hoy` +
+        (quota.bonus > 0 ? ` (+${quota.bonus} extra)` : '') +
+        ' · se reinicia a medianoche (hora Argentina)';
+    }
   }
+  if (manageSubBtn) manageSubBtn.classList.toggle('hidden', !isPaid);
+}
+
+if (manageSubBtn) {
+  manageSubBtn.addEventListener('click', () => {
+    if (manageSubNote) manageSubNote.classList.toggle('hidden');
+  });
 }
 
 function renderStreak(streak) {
@@ -134,9 +174,15 @@ if (clockPill) {
 
 (async function initSession() {
   try {
-    const res = await fetch('/api/me');
+    const [res, plansRes] = await Promise.all([fetch('/api/me'), fetch('/api/plans')]);
     if (res.status === 401) return window.location.href = '/login';
     const data = await res.json();
+    try {
+      const plansData = await plansRes.json();
+      (plansData.plans || []).forEach((p) => { planCatalog[p.key] = p; });
+    } catch (err) {
+      // si falla, renderQuota simplemente no muestra el precio del plan
+    }
     currentEmail = data.email;
     sessionUser.textContent = `👤 ${data.email}`;
     settingsEmail.textContent = data.email;
@@ -422,6 +468,14 @@ processBtn.addEventListener('click', async () => {
     const res = await fetch('/api/process', { method: 'POST', body: formData });
     if (res.status === 401) return window.location.href = '/login';
     const data = await res.json();
+    if (res.status === 429) {
+      progressWrap.classList.add('hidden');
+      progressFill.classList.remove('indeterminate');
+      processBtn.disabled = false;
+      processBtn.textContent = '⚙️ Procesar video';
+      if (window.showLimitModal) window.showLimitModal(data);
+      return;
+    }
     if (!res.ok) throw new Error(data.error || 'Error al procesar el video.');
 
     currentJobId = data.jobId;

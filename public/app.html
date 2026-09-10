@@ -23,6 +23,7 @@
       <span id="sessionUser"></span>
       <span class="streak-pill hidden" id="streakPill" title="Días seguidos usando la app"></span>
       <span class="quota-pill" id="quotaPill" title="Videos disponibles hoy"></span>
+      <a href="/precios" class="icon-btn" title="Ver planes">💳</a>
       <a id="adminLink" href="/admin" class="icon-btn hidden" title="Panel de admin">🛠️</a>
       <button id="themeToggleBtn" class="icon-btn" title="Cambiar tema">☀️</button>
       <button id="settingsBtn" class="icon-btn" title="Configuración">⚙️</button>
@@ -331,9 +332,20 @@
         <span id="settingsEmail" class="settings-value"></span>
       </div>
 
-      <div class="settings-row">
-        <span class="settings-label">Plan</span>
-        <span id="settingsQuota" class="settings-value"></span>
+      <div class="coupon-box">
+        <label>📦 Mi plan</label>
+        <p class="meta-hint" id="planSummary" style="margin:0 0 4px;"></p>
+        <div class="plan-usage-bar-wrap hidden" id="planUsageBarWrap">
+          <div class="plan-usage-bar" id="planUsageBar"></div>
+        </div>
+        <p class="meta-hint" id="planUsageText" style="margin:8px 0 0;"></p>
+        <div class="coupon-row" style="margin-top:12px;">
+          <a href="/precios" class="btn-secondary" style="text-decoration:none;text-align:center;">Cambiar plan</a>
+          <button type="button" id="manageSubBtn" class="btn-secondary hidden">Administrar suscripción</button>
+        </div>
+        <p class="meta-hint hidden" id="manageSubNote" style="margin-top:8px;">
+          Todavía no tenemos un portal de facturación automático. Para cambiar tu medio de pago o cancelar, escribinos.
+        </p>
       </div>
 
       <div class="coupon-box" id="couponBox">
@@ -360,6 +372,18 @@
         <p class="meta-hint" style="margin:0 0 10px;" id="badgesSummary"></p>
         <div class="badges-grid" id="badgesGrid"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal de "llegaste a tu límite diario" (lo dispara fun.js::showLimitModal) -->
+  <div class="modal-overlay hidden" id="limitModalOverlay">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>🚦 Alcanzaste tu límite diario</h2>
+        <button type="button" class="modal-close" id="limitModalCloseBtn">✕</button>
+      </div>
+      <p id="limitModalMessage" class="meta-hint" style="margin-top:0;"></p>
+      <div class="mini-plan-grid" id="limitModalPlans"></div>
     </div>
   </div>
 

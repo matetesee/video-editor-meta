@@ -132,6 +132,14 @@ audioExportBtn.addEventListener('click', async () => {
     const res = await fetch('/api/extract-audio', { method: 'POST', body: formData });
     if (res.status === 401) return (window.location.href = '/login');
     const data = await res.json();
+    if (res.status === 429) {
+      audioProgressWrap.classList.add('hidden');
+      audioProgressFill.classList.remove('indeterminate');
+      audioExportBtn.disabled = false;
+      audioExportBtn.textContent = '🎧 Extraer audio';
+      if (window.showLimitModal) window.showLimitModal(data);
+      return;
+    }
     if (!res.ok) throw new Error(data.error || 'Error al extraer el audio.');
 
     audioJobId = data.jobId;

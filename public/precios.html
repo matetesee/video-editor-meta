@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planes - Editor de Video de Dematiu</title>
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+  <div class="app">
+    <div class="session-bar">
+      <a href="/" class="link-btn-inline" id="backLink" style="margin:0;">← Volver a la app</a>
+      <span style="flex:1;"></span>
+      <button id="themeToggleBtn" class="icon-btn" title="Cambiar tema">☀️</button>
+    </div>
+
+    <header>
+      <h1>💳 Elegí tu plan</h1>
+      <p class="subtitle">Empezá gratis. Mejorá cuando necesites procesar más videos por día.</p>
+    </header>
+
+    <p class="error hidden" id="pricingMessage" style="text-align:center;"></p>
+
+    <div class="pricing-grid" id="pricingGrid">
+      <p class="empty-hint">Cargando planes...</p>
+    </div>
+
+    <p class="meta-hint" style="text-align:center;margin-top:24px;">
+      Los planes pagos todavía se activan de forma manual mientras terminamos de conectar el cobro en línea.
+      Al elegir uno, dejás registrado tu interés y lo activamos a la brevedad.
+    </p>
+  </div>
+
+  <script src="precios.js"></script>
+</body>
+</html>

@@ -736,6 +736,14 @@ editorExportBtn.addEventListener('click', async () => {
     const res = await fetch('/api/edit', { method: 'POST', body: formData });
     if (res.status === 401) return (window.location.href = '/login');
     const data = await res.json();
+    if (res.status === 429) {
+      editorProgressWrap.classList.add('hidden');
+      editorProgressFill.classList.remove('indeterminate');
+      editorExportBtn.disabled = false;
+      editorExportBtn.textContent = '🎬 Exportar video';
+      if (window.showLimitModal) window.showLimitModal(data);
+      return;
+    }
     if (!res.ok) throw new Error(data.error || 'Error al exportar el video.');
 
     editorJobId = data.jobId;
