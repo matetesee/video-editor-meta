@@ -36,6 +36,7 @@
     <nav class="section-tabs">
       <button type="button" class="section-tab active" data-section="optimizerSection">🎯 Optimizador Meta</button>
       <button type="button" class="section-tab" data-section="editorSection">✂️ Mini Editor</button>
+      <button type="button" class="section-tab" data-section="audioSection">🎧 Extraer Audio</button>
       <button type="button" class="section-tab" data-section="historySection">📁 Historial</button>
     </nav>
 
@@ -142,8 +143,57 @@
         </section>
 
         <section class="panel hidden" id="editorEditPanel">
-          <p class="section-label">1. Clips y recorte</p>
-          <div id="clipsList"></div>
+          <p class="section-label">1. Vista previa y línea de tiempo</p>
+
+          <div class="editor-preview-wrap">
+            <video id="editorPreviewVideo" playsinline muted></video>
+            <div class="editor-caption-layer" id="editorCaptionLayer"></div>
+          </div>
+          <div class="editor-preview-controls">
+            <button type="button" id="editorPlayBtn" class="icon-btn icon-btn-lg" title="Reproducir/Pausar">▶️</button>
+            <span id="editorTimeLabel">0:00 / 0:00</span>
+          </div>
+
+          <div class="editor-timeline" id="editorTimelineWrap">
+            <div class="timeline-ruler" id="timelineRuler" title="Tocá o arrastrá para mover el cabezal"></div>
+            <div class="timeline-clips" id="timelineClips"></div>
+            <div class="timeline-text-track" id="timelineTextTrack"></div>
+            <div class="timeline-playhead" id="timelinePlayhead"></div>
+          </div>
+
+          <div class="editor-toolbar">
+            <button type="button" id="splitBtn" class="btn-secondary" disabled>🔪 Dividir aquí</button>
+            <button type="button" id="addTextBtn" class="btn-secondary">🔤 Agregar texto</button>
+            <button type="button" id="clipUpBtn" class="btn-secondary" disabled>↑ Mover</button>
+            <button type="button" id="clipDownBtn" class="btn-secondary" disabled>↓ Mover</button>
+            <button type="button" id="deleteSelectedBtn" class="btn-secondary" disabled>🗑️ Eliminar</button>
+          </div>
+          <p class="meta-hint" id="timelineHint">Tocá un clip o un texto en la línea de tiempo para editarlo. Movete con la reglita de arriba y usá "Dividir aquí" para cortar un clip en dos.</p>
+
+          <div class="editor-inspector hidden" id="clipInspector">
+            <p class="section-label" style="margin-top:0;">Clip seleccionado: <span id="clipInspectorName"></span></p>
+            <div class="clip-trim">
+              Desde <input type="number" min="0" step="0.1" id="clipStartInput"> s
+              hasta <input type="number" min="0" step="0.1" id="clipEndInput"> s
+            </div>
+          </div>
+
+          <div class="editor-inspector hidden" id="textInspector">
+            <p class="section-label" style="margin-top:0;">Texto seleccionado</p>
+            <input type="text" id="textInspectorText" placeholder="Ej: 50% OFF hoy" maxlength="200">
+            <div class="overlay-row">
+              <select id="textInspectorPosition">
+                <option value="top">Arriba</option>
+                <option value="center">Centro</option>
+                <option value="bottom" selected>Abajo</option>
+              </select>
+              <input type="color" id="textInspectorColor" value="#ffffff">
+            </div>
+            <div class="clip-trim">
+              Aparece desde <input type="number" min="0" step="0.1" id="textStartInput"> s
+              hasta <input type="number" min="0" step="0.1" id="textEndInput"> s
+            </div>
+          </div>
 
           <p class="section-label">2. Formato de salida</p>
           <div class="panel meta-panel">
@@ -155,25 +205,7 @@
             </select>
           </div>
 
-          <p class="section-label">3. Texto sobre el video (opcional)</p>
-          <div class="panel meta-panel">
-            <label class="overlay-toggle-label">
-              <input type="checkbox" id="overlayEnabled"> 📝 Agregar texto quemado sobre el video
-            </label>
-            <div id="overlayControls" class="overlay-controls hidden">
-              <input type="text" id="overlayText" placeholder="Ej: 50% OFF hoy" maxlength="200">
-              <div class="overlay-row">
-                <select id="overlayPosition">
-                  <option value="top">Arriba</option>
-                  <option value="center">Centro</option>
-                  <option value="bottom" selected>Abajo</option>
-                </select>
-                <input type="color" id="overlayColor" value="#ffffff">
-              </div>
-            </div>
-          </div>
-
-          <p class="section-label">4. Calidad</p>
+          <p class="section-label">3. Calidad</p>
           <div class="controls">
             <div class="control-group">
               <label for="editorQuality">Calidad / tamaño</label>
@@ -185,7 +217,7 @@
             </div>
           </div>
 
-          <p class="section-label">5. Nombre del archivo</p>
+          <p class="section-label">4. Nombre del archivo</p>
           <div class="control-group title-group">
             <label for="editorTitle">✏️ Título del video</label>
             <input type="text" id="editorTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
@@ -212,6 +244,63 @@
           </div>
 
           <div class="error hidden" id="editorErrorPanel"></div>
+        </section>
+      </div>
+
+      <div id="audioSection" class="hidden">
+        <section class="panel" id="audioUploadPanel">
+          <label class="dropzone" id="audioDropzone">
+            <input type="file" id="audioFileInput" accept="video/*" hidden>
+            <span>🎧 Arrastrá un video acá (o hacé click) para extraerle el audio</span>
+          </label>
+        </section>
+
+        <section class="panel hidden" id="audioEditPanel">
+          <p class="section-label">1. Formato de salida</p>
+          <div class="panel meta-panel">
+            <label for="audioFormat">🎵 Formato</label>
+            <select id="audioFormat">
+              <option value="mp3" selected>MP3 (el más compatible)</option>
+              <option value="m4a">M4A / AAC</option>
+              <option value="wav">WAV (sin comprimir, pesa más)</option>
+            </select>
+            <div id="audioBitrateWrap">
+              <label for="audioBitrate" style="margin-top:10px;">Calidad</label>
+              <select id="audioBitrate">
+                <option value="128k">128 kbps</option>
+                <option value="192k" selected>192 kbps</option>
+                <option value="320k">320 kbps</option>
+              </select>
+            </div>
+          </div>
+
+          <p class="section-label">2. Nombre del archivo</p>
+          <div class="control-group title-group">
+            <label for="audioTitle">✏️ Título del audio</label>
+            <input type="text" id="audioTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
+          </div>
+
+          <div class="actions">
+            <button id="audioExportBtn" class="btn-primary">🎧 Extraer audio</button>
+            <button id="audioResetBtn" class="btn-secondary">Elegir otro video</button>
+          </div>
+
+          <div class="progress-wrap hidden" id="audioProgressWrap">
+            <div class="progress-head">
+              <span id="audioProgressText">Subiendo...</span>
+              <span id="audioElapsedText">0s</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="audioProgressFill"></div></div>
+            <button id="audioCancelBtn" class="btn-ghost-cancel">✕ Cancelar</button>
+          </div>
+
+          <div class="result hidden" id="audioResultPanel">
+            <p>✅ ¡Listo! Ya tenés el audio.</p>
+            <p class="result-meta" id="audioResultMeta"></p>
+            <a id="audioDownloadLink" class="btn-primary" download>⬇️ Descargar audio</a>
+          </div>
+
+          <div class="error hidden" id="audioErrorPanel"></div>
         </section>
       </div>
 
@@ -288,5 +377,6 @@
   <script src="fun.js"></script>
   <script src="script.js"></script>
   <script src="editor.js"></script>
+  <script src="audio.js"></script>
 </body>
 </html>

@@ -1,18 +1,15 @@
-// Mini editor: varios clips en fila, recorte por clip, texto quemado
-// opcional. Vive completamente aparte de script.js (el optimizador) para no
-// arriesgar romper nada de esa parte, que ya funciona bien.
+// Mini editor: varios clips que se unen en uno, con una vista previa
+// "estilo CapCut" (reproduce los clips ya recortados en secuencia, sin
+// esperar al servidor), una linea de tiempo donde tocás/arrastrás para
+// recortar, dividir un clip en dos, y agregar textos que aparecen solo en
+// el tramo de tiempo que quieras. Vive completamente aparte de script.js
+// (el optimizador) para no arriesgar romper nada de esa parte.
 
 const editorDropzone = document.getElementById('editorDropzone');
 const editorFileInput = document.getElementById('editorFileInput');
 const editorUploadPanel = document.getElementById('editorUploadPanel');
 const editorEditPanel = document.getElementById('editorEditPanel');
-const clipsList = document.getElementById('clipsList');
 const editorPresetSel = document.getElementById('editorPreset');
-const overlayEnabledChk = document.getElementById('overlayEnabled');
-const overlayControls = document.getElementById('overlayControls');
-const overlayTextInput = document.getElementById('overlayText');
-const overlayPositionSel = document.getElementById('overlayPosition');
-const overlayColorInput = document.getElementById('overlayColor');
 const editorTitleInput = document.getElementById('editorTitle');
 const editorQualitySel = document.getElementById('editorQuality');
 const editorExportBtn = document.getElementById('editorExportBtn');
@@ -27,17 +24,63 @@ const editorResultMeta = document.getElementById('editorResultMeta');
 const editorDownloadLink = document.getElementById('editorDownloadLink');
 const editorErrorPanel = document.getElementById('editorErrorPanel');
 
-let clips = []; // { file, duration, start, end }
+// Vista previa + linea de tiempo
+const editorPreviewVideo = document.getElementById('editorPreviewVideo');
+const editorCaptionLayer = document.getElementById('editorCaptionLayer');
+const editorPlayBtn = document.getElementById('editorPlayBtn');
+const editorTimeLabel = document.getElementById('editorTimeLabel');
+const timelineRuler = document.getElementById('timelineRuler');
+const timelineClipsEl = document.getElementById('timelineClips');
+const timelineTextTrackEl = document.getElementById('timelineTextTrack');
+const timelinePlayhead = document.getElementById('timelinePlayhead');
+const splitBtn = document.getElementById('splitBtn');
+const addTextBtn = document.getElementById('addTextBtn');
+const clipUpBtn = document.getElementById('clipUpBtn');
+const clipDownBtn = document.getElementById('clipDownBtn');
+const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+const clipInspector = document.getElementById('clipInspector');
+const clipInspectorName = document.getElementById('clipInspectorName');
+const clipStartInput = document.getElementById('clipStartInput');
+const clipEndInput = document.getElementById('clipEndInput');
+const textInspector = document.getElementById('textInspector');
+const textInspectorText = document.getElementById('textInspectorText');
+const textInspectorPosition = document.getElementById('textInspectorPosition');
+const textInspectorColor = document.getElementById('textInspectorColor');
+const textStartInput = document.getElementById('textStartInput');
+const textEndInput = document.getElementById('textEndInput');
+
+let clips = []; // { id, file, objectUrl, duration, start, end }
+let textOverlays = []; // { id, text, start, end (tiempo GLOBAL, ya unido), position, color (sin '#') }
+let selectedClipId = null;
+let selectedTextId = null;
+let clipRangesCache = []; // [{ clip, globalStart, globalEnd }]
+let activeClipIndex = -1;
+let playheadTime = 0;
 let editorPollTimer = null;
 let editorElapsedTimer = null;
 let editorElapsedStart = 0;
 let editorJobId = null;
+
+function uid() {
+  return window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now();
+}
 
 function formatBytesEditor(bytes) {
   if (!bytes) return '0 MB';
   const mb = bytes / (1024 * 1024);
   if (mb < 1) return `${Math.round(bytes / 1024)} KB`;
   return `${mb.toFixed(1)} MB`;
+}
+
+function formatTimeShort(s) {
+  s = Math.max(0, s || 0);
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function totalDuration() {
+  return clips.reduce((sum, c) => sum + Math.max(0, c.end - c.start), 0);
 }
 
 function probeDuration(file) {
@@ -53,69 +96,329 @@ function probeDuration(file) {
   });
 }
 
-function renderClips() {
-  clipsList.innerHTML = '';
-  clips.forEach((clip, i) => {
-    const row = document.createElement('div');
-    row.className = 'clip-row';
-    row.innerHTML = `
-      <div class="clip-num">${i + 1}</div>
-      <div class="clip-info">
-        <div class="clip-name">${clip.file.name}</div>
-        <div class="clip-trim">
-          Desde <input type="number" min="0" step="0.1" value="${clip.start.toFixed(1)}" data-role="start"> s
-          hasta <input type="number" min="0" step="0.1" value="${clip.end.toFixed(1)}" data-role="end"> s
-          (dura ${clip.duration.toFixed(1)}s)
-        </div>
-      </div>
-      <div class="clip-actions">
-        <button type="button" data-role="up" title="Mover arriba">↑</button>
-        <button type="button" data-role="down" title="Mover abajo">↓</button>
-        <button type="button" data-role="remove" class="remove" title="Quitar">✕</button>
-      </div>
-    `;
+// ---- Seleccion ----
+function selectClip(id) {
+  selectedClipId = id;
+  selectedTextId = null;
+  renderTimeline();
+}
+function selectText(id) {
+  selectedTextId = id;
+  selectedClipId = null;
+  renderTimeline();
+}
 
-    row.querySelector('[data-role="start"]').addEventListener('change', (e) => {
-      const val = Math.max(0, Math.min(clip.duration - 0.1, parseFloat(e.target.value) || 0));
-      clip.start = val;
-      if (clip.end <= clip.start) clip.end = Math.min(clip.duration, clip.start + 1);
-      renderClips();
-    });
-    row.querySelector('[data-role="end"]').addEventListener('change', (e) => {
-      const val = Math.max(clip.start + 0.1, Math.min(clip.duration, parseFloat(e.target.value) || clip.duration));
-      clip.end = val;
-      renderClips();
-    });
-    row.querySelector('[data-role="up"]').addEventListener('click', () => {
-      if (i === 0) return;
-      [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]];
-      renderClips();
-    });
-    row.querySelector('[data-role="down"]').addEventListener('click', () => {
-      if (i === clips.length - 1) return;
-      [clips[i + 1], clips[i]] = [clips[i], clips[i + 1]];
-      renderClips();
-    });
-    row.querySelector('[data-role="remove"]').addEventListener('click', () => {
-      clips.splice(i, 1);
-      if (clips.length === 0) {
-        resetEditor();
-      } else {
-        renderClips();
-      }
-    });
-
-    clipsList.appendChild(row);
+// ---- Arrastre generico con Pointer Events ----
+// callback onMove recibe (deltaX en px desde que arranco el drag, evento)
+function wireDrag(el, onStart, onMove, onEnd) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target !== el && !el.contains(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    const ctx = onStart ? onStart(e) : {};
+    const startX = e.clientX;
+    const move = (ev) => onMove(ev.clientX - startX, ctx, ev);
+    const up = (ev) => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      if (onEnd) onEnd(ctx);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
   });
 }
 
+function wireClipTrimHandle(handleEl, clip, edge) {
+  wireDrag(
+    handleEl,
+    () => ({
+      total: totalDuration(),
+      widthPx: timelineClipsEl.getBoundingClientRect().width || 1,
+      start: clip.start,
+      end: clip.end,
+    }),
+    (deltaX, ctx) => {
+      const deltaTime = (deltaX / ctx.widthPx) * ctx.total;
+      if (edge === 'start') {
+        clip.start = Math.max(0, Math.min(ctx.start + deltaTime, clip.end - 0.2));
+      } else {
+        clip.end = Math.min(clip.duration, Math.max(ctx.end + deltaTime, clip.start + 0.2));
+      }
+      renderTimeline();
+    },
+    () => seekGlobal(playheadTime)
+  );
+}
+
+function wireTextBlockDrag(blockEl, overlay) {
+  wireDrag(
+    blockEl,
+    (e) => {
+      if (e.target.classList.contains('trim-handle')) return { skip: true };
+      selectText(overlay.id);
+      return {
+        skip: false,
+        total: totalDuration(),
+        widthPx: timelineTextTrackEl.getBoundingClientRect().width || 1,
+        dur: overlay.end - overlay.start,
+        start: overlay.start,
+      };
+    },
+    (deltaX, ctx) => {
+      if (ctx.skip) return;
+      const deltaTime = (deltaX / ctx.widthPx) * ctx.total;
+      const newStart = Math.max(0, Math.min(ctx.total - ctx.dur, ctx.start + deltaTime));
+      overlay.start = newStart;
+      overlay.end = newStart + ctx.dur;
+      renderTimeline();
+    },
+    () => {}
+  );
+}
+
+function wireTextHandle(handleEl, overlay, edge) {
+  wireDrag(
+    handleEl,
+    () => ({
+      total: totalDuration(),
+      widthPx: timelineTextTrackEl.getBoundingClientRect().width || 1,
+      start: overlay.start,
+      end: overlay.end,
+    }),
+    (deltaX, ctx) => {
+      const deltaTime = (deltaX / ctx.widthPx) * ctx.total;
+      if (edge === 'start') {
+        overlay.start = Math.max(0, Math.min(ctx.start + deltaTime, overlay.end - 0.3));
+      } else {
+        overlay.end = Math.min(ctx.total, Math.max(ctx.end + deltaTime, overlay.start + 0.3));
+      }
+      renderTimeline();
+    },
+    () => {}
+  );
+}
+
+function wireRulerScrub() {
+  const seekFromEvent = (e) => {
+    const rect = timelineRuler.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / (rect.width || 1)));
+    seekGlobal(pct * totalDuration());
+  };
+  timelineRuler.addEventListener('pointerdown', (e) => {
+    try { timelineRuler.setPointerCapture(e.pointerId); } catch {}
+    seekFromEvent(e);
+    const move = (ev) => seekFromEvent(ev);
+    const up = () => {
+      timelineRuler.removeEventListener('pointermove', move);
+      timelineRuler.removeEventListener('pointerup', up);
+    };
+    timelineRuler.addEventListener('pointermove', move);
+    timelineRuler.addEventListener('pointerup', up);
+  });
+}
+wireRulerScrub();
+
+// ---- Render de la linea de tiempo ----
+function renderClipBlocks(total) {
+  timelineClipsEl.innerHTML = '';
+  clipRangesCache = [];
+  let cursor = 0;
+  clips.forEach((clip) => {
+    const dur = Math.max(0, clip.end - clip.start);
+    const globalStart = cursor;
+    const globalEnd = cursor + dur;
+    clipRangesCache.push({ clip, globalStart, globalEnd });
+    cursor = globalEnd;
+
+    const el = document.createElement('div');
+    el.className = 'timeline-clip' + (clip.id === selectedClipId ? ' selected' : '');
+    el.style.left = (total > 0 ? (globalStart / total) * 100 : 0) + '%';
+    el.style.width = (total > 0 ? (dur / total) * 100 : 100 / Math.max(1, clips.length)) + '%';
+    el.innerHTML = `
+      <span class="timeline-clip-label">${clip.file.name}</span>
+      <div class="trim-handle trim-handle-left"></div>
+      <div class="trim-handle trim-handle-right"></div>
+    `;
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('trim-handle')) return;
+      selectClip(clip.id);
+    });
+    wireClipTrimHandle(el.querySelector('.trim-handle-left'), clip, 'start');
+    wireClipTrimHandle(el.querySelector('.trim-handle-right'), clip, 'end');
+    timelineClipsEl.appendChild(el);
+  });
+  timelineClipsEl.addEventListener('click', (e) => {
+    if (e.target === timelineClipsEl) {
+      selectedClipId = null;
+      selectedTextId = null;
+      renderTimeline();
+    }
+  });
+}
+
+function renderTextTrack(total) {
+  timelineTextTrackEl.innerHTML = '';
+  textOverlays.forEach((ov) => {
+    const el = document.createElement('div');
+    el.className = 'timeline-text-block' + (ov.id === selectedTextId ? ' selected' : '');
+    el.style.left = (total > 0 ? (ov.start / total) * 100 : 0) + '%';
+    el.style.width = (total > 0 ? ((ov.end - ov.start) / total) * 100 : 10) + '%';
+    el.innerHTML = `
+      <span class="timeline-text-label">🔤 ${(ov.text || '').slice(0, 24)}</span>
+      <div class="trim-handle trim-handle-left"></div>
+      <div class="trim-handle trim-handle-right"></div>
+    `;
+    wireTextBlockDrag(el, ov);
+    wireTextHandle(el.querySelector('.trim-handle-left'), ov, 'start');
+    wireTextHandle(el.querySelector('.trim-handle-right'), ov, 'end');
+    timelineTextTrackEl.appendChild(el);
+  });
+}
+
+function renderCaptionLayer() {
+  editorCaptionLayer.innerHTML = '';
+  textOverlays.forEach((ov) => {
+    const el = document.createElement('div');
+    el.className = 'editor-caption editor-caption-' + ov.position;
+    el.style.color = '#' + ov.color;
+    el.textContent = ov.text;
+    el.dataset.id = ov.id;
+    el.hidden = true;
+    editorCaptionLayer.appendChild(el);
+  });
+}
+
+function updateCaptionVisibility(t) {
+  editorCaptionLayer.querySelectorAll('.editor-caption').forEach((el) => {
+    const ov = textOverlays.find((o) => o.id === el.dataset.id);
+    el.hidden = !(ov && t >= ov.start && t < ov.end);
+  });
+}
+
+function updatePlayheadPosition() {
+  const total = totalDuration() || 1;
+  const pct = Math.max(0, Math.min(1, playheadTime / total)) * 100;
+  timelinePlayhead.style.left = pct + '%';
+}
+
+function updateTimeLabel() {
+  editorTimeLabel.textContent = `${formatTimeShort(playheadTime)} / ${formatTimeShort(totalDuration())}`;
+}
+
+function updateInspectors() {
+  const clip = clips.find((c) => c.id === selectedClipId);
+  const text = textOverlays.find((t) => t.id === selectedTextId);
+  clipInspector.classList.toggle('hidden', !clip);
+  textInspector.classList.toggle('hidden', !text);
+  splitBtn.disabled = !clip;
+  clipUpBtn.disabled = !clip || clips.indexOf(clip) === 0;
+  clipDownBtn.disabled = !clip || clips.indexOf(clip) === clips.length - 1;
+  deleteSelectedBtn.disabled = !clip && !text;
+
+  if (clip) {
+    clipInspectorName.textContent = clip.file.name;
+    if (document.activeElement !== clipStartInput) clipStartInput.value = clip.start.toFixed(1);
+    if (document.activeElement !== clipEndInput) clipEndInput.value = clip.end.toFixed(1);
+  }
+  if (text) {
+    if (document.activeElement !== textInspectorText) textInspectorText.value = text.text;
+    textInspectorPosition.value = text.position;
+    textInspectorColor.value = '#' + text.color;
+    if (document.activeElement !== textStartInput) textStartInput.value = text.start.toFixed(1);
+    if (document.activeElement !== textEndInput) textEndInput.value = text.end.toFixed(1);
+  }
+}
+
+function renderTimeline() {
+  const total = totalDuration();
+  renderClipBlocks(total);
+  renderTextTrack(total || 1);
+  renderCaptionLayer();
+  updateInspectors();
+  updatePlayheadPosition();
+  updateTimeLabel();
+  updateCaptionVisibility(playheadTime);
+}
+
+// ---- Reproductor "secuencia" (varios clips como si ya estuvieran unidos) ----
+function findClipRangeAtTime(t) {
+  for (const r of clipRangesCache) {
+    if (t >= r.globalStart && t < r.globalEnd) return r;
+  }
+  return clipRangesCache.length ? clipRangesCache[clipRangesCache.length - 1] : null;
+}
+
+function seekGlobal(t, opts) {
+  const autoplay = opts && opts.autoplay;
+  const total = totalDuration();
+  t = Math.max(0, Math.min(total, t));
+  playheadTime = t;
+  updatePlayheadPosition();
+  updateTimeLabel();
+  updateCaptionVisibility(t);
+
+  const range = findClipRangeAtTime(t);
+  if (!range) return;
+  const idx = clipRangesCache.indexOf(range);
+  const localTime = range.clip.start + (t - range.globalStart);
+
+  const applyTime = () => {
+    editorPreviewVideo.currentTime = localTime;
+    if (autoplay) editorPreviewVideo.play().catch(() => {});
+  };
+
+  if (idx !== activeClipIndex || editorPreviewVideo.src !== range.clip.objectUrl) {
+    activeClipIndex = idx;
+    editorPreviewVideo.src = range.clip.objectUrl;
+    editorPreviewVideo.onloadedmetadata = applyTime;
+    editorPreviewVideo.load();
+  } else {
+    applyTime();
+  }
+}
+
+editorPreviewVideo.addEventListener('timeupdate', () => {
+  if (activeClipIndex === -1 || !clipRangesCache[activeClipIndex]) return;
+  const range = clipRangesCache[activeClipIndex];
+  const globalT = range.globalStart + (editorPreviewVideo.currentTime - range.clip.start);
+  playheadTime = globalT;
+  updatePlayheadPosition();
+  updateTimeLabel();
+  updateCaptionVisibility(globalT);
+
+  if (editorPreviewVideo.currentTime >= range.clip.end - 0.05) {
+    if (activeClipIndex < clipRangesCache.length - 1) {
+      const wasPlaying = !editorPreviewVideo.paused;
+      seekGlobal(range.globalEnd, { autoplay: wasPlaying });
+    } else {
+      editorPreviewVideo.pause();
+    }
+  }
+});
+editorPreviewVideo.addEventListener('play', () => { editorPlayBtn.textContent = '⏸️'; });
+editorPreviewVideo.addEventListener('pause', () => { editorPlayBtn.textContent = '▶️'; });
+
+editorPlayBtn.addEventListener('click', () => {
+  if (clips.length === 0) return;
+  if (editorPreviewVideo.paused) {
+    const total = totalDuration();
+    if (playheadTime >= total - 0.05) seekGlobal(0);
+    seekGlobal(playheadTime, { autoplay: true });
+  } else {
+    editorPreviewVideo.pause();
+  }
+});
+
+// ---- Agregar clips ----
 async function addFiles(fileList) {
   const files = Array.from(fileList).filter((f) => f.type.startsWith('video/'));
   if (files.length === 0) return;
+  const wasEmpty = clips.length === 0;
 
   for (const file of files) {
     const duration = await probeDuration(file);
-    clips.push({ file, duration, start: 0, end: duration });
+    clips.push({ id: uid(), file, objectUrl: URL.createObjectURL(file), duration, start: 0, end: duration });
   }
 
   if (!editorTitleInput.value) {
@@ -126,7 +429,10 @@ async function addFiles(fileList) {
   editorEditPanel.classList.remove('hidden');
   editorResultPanel.classList.add('hidden');
   editorErrorPanel.classList.add('hidden');
-  renderClips();
+
+  if (wasEmpty) selectedClipId = clips[0].id;
+  renderTimeline();
+  if (wasEmpty) seekGlobal(0);
 }
 
 editorDropzone.addEventListener('click', () => editorFileInput.click());
@@ -146,10 +452,120 @@ editorFileInput.addEventListener('change', (e) => addFiles(e.target.files));
 );
 editorDropzone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
 
-overlayEnabledChk.addEventListener('change', () => {
-  overlayControls.classList.toggle('hidden', !overlayEnabledChk.checked);
+// ---- Barra de herramientas: dividir / mover / eliminar / agregar texto ----
+splitBtn.addEventListener('click', () => {
+  const idx = clips.findIndex((c) => c.id === selectedClipId);
+  if (idx === -1) return;
+  const range = clipRangesCache[idx];
+  if (!range) return;
+  const localSplit = range.clip.start + (playheadTime - range.globalStart);
+  if (localSplit <= range.clip.start + 0.15 || localSplit >= range.clip.end - 0.15) {
+    alert('Movete con la reglita a un punto DENTRO del clip seleccionado para poder dividirlo ahí.');
+    return;
+  }
+  const original = clips[idx];
+  const first = { ...original, id: uid(), end: localSplit };
+  const second = { ...original, id: uid(), start: localSplit };
+  clips.splice(idx, 1, first, second);
+  selectedClipId = second.id;
+  renderTimeline();
+  seekGlobal(playheadTime);
 });
 
+clipUpBtn.addEventListener('click', () => {
+  const idx = clips.findIndex((c) => c.id === selectedClipId);
+  if (idx <= 0) return;
+  [clips[idx - 1], clips[idx]] = [clips[idx], clips[idx - 1]];
+  renderTimeline();
+  seekGlobal(playheadTime);
+});
+clipDownBtn.addEventListener('click', () => {
+  const idx = clips.findIndex((c) => c.id === selectedClipId);
+  if (idx === -1 || idx >= clips.length - 1) return;
+  [clips[idx + 1], clips[idx]] = [clips[idx], clips[idx + 1]];
+  renderTimeline();
+  seekGlobal(playheadTime);
+});
+
+deleteSelectedBtn.addEventListener('click', () => {
+  if (selectedClipId) {
+    clips = clips.filter((c) => c.id !== selectedClipId);
+    selectedClipId = null;
+    if (clips.length === 0) {
+      resetEditor();
+      return;
+    }
+    renderTimeline();
+    seekGlobal(Math.min(playheadTime, totalDuration()));
+  } else if (selectedTextId) {
+    textOverlays = textOverlays.filter((t) => t.id !== selectedTextId);
+    selectedTextId = null;
+    renderTimeline();
+  }
+});
+
+addTextBtn.addEventListener('click', () => {
+  const total = totalDuration();
+  if (total <= 0) return;
+  const start = Math.max(0, Math.min(playheadTime, total - 0.5));
+  const end = Math.min(total, start + 2);
+  const overlay = { id: uid(), text: 'Tu texto acá', start, end, position: 'bottom', color: 'ffffff' };
+  textOverlays.push(overlay);
+  selectedTextId = overlay.id;
+  selectedClipId = null;
+  renderTimeline();
+  textInspectorText.focus();
+  textInspectorText.select();
+});
+
+// ---- Inspectores (edicion fina por numero) ----
+clipStartInput.addEventListener('change', () => {
+  const clip = clips.find((c) => c.id === selectedClipId);
+  if (!clip) return;
+  clip.start = Math.max(0, Math.min(clip.end - 0.2, parseFloat(clipStartInput.value) || 0));
+  renderTimeline();
+  seekGlobal(playheadTime);
+});
+clipEndInput.addEventListener('change', () => {
+  const clip = clips.find((c) => c.id === selectedClipId);
+  if (!clip) return;
+  clip.end = Math.max(clip.start + 0.2, Math.min(clip.duration, parseFloat(clipEndInput.value) || clip.duration));
+  renderTimeline();
+  seekGlobal(playheadTime);
+});
+
+textInspectorText.addEventListener('input', () => {
+  const text = textOverlays.find((t) => t.id === selectedTextId);
+  if (!text) return;
+  text.text = textInspectorText.value.slice(0, 200);
+  renderTimeline();
+});
+textInspectorPosition.addEventListener('change', () => {
+  const text = textOverlays.find((t) => t.id === selectedTextId);
+  if (!text) return;
+  text.position = textInspectorPosition.value;
+  renderTimeline();
+});
+textInspectorColor.addEventListener('input', () => {
+  const text = textOverlays.find((t) => t.id === selectedTextId);
+  if (!text) return;
+  text.color = textInspectorColor.value.replace('#', '');
+  renderTimeline();
+});
+textStartInput.addEventListener('change', () => {
+  const text = textOverlays.find((t) => t.id === selectedTextId);
+  if (!text) return;
+  text.start = Math.max(0, Math.min(text.end - 0.2, parseFloat(textStartInput.value) || 0));
+  renderTimeline();
+});
+textEndInput.addEventListener('change', () => {
+  const text = textOverlays.find((t) => t.id === selectedTextId);
+  if (!text) return;
+  text.end = Math.max(text.start + 0.2, Math.min(totalDuration(), parseFloat(textEndInput.value) || text.end));
+  renderTimeline();
+});
+
+// ---- Reset ----
 function stopEditorTimers() {
   if (editorPollTimer) clearInterval(editorPollTimer);
   if (editorElapsedTimer) clearInterval(editorElapsedTimer);
@@ -159,13 +575,25 @@ function stopEditorTimers() {
 
 function resetEditor() {
   stopEditorTimers();
+  const seen = new Set();
+  clips.forEach((c) => {
+    if (!seen.has(c.objectUrl)) {
+      seen.add(c.objectUrl);
+      URL.revokeObjectURL(c.objectUrl);
+    }
+  });
   clips = [];
+  textOverlays = [];
+  selectedClipId = null;
+  selectedTextId = null;
+  activeClipIndex = -1;
+  playheadTime = 0;
   editorJobId = null;
   editorFileInput.value = '';
   editorTitleInput.value = '';
-  overlayEnabledChk.checked = false;
-  overlayControls.classList.add('hidden');
-  overlayTextInput.value = '';
+  editorPreviewVideo.pause();
+  editorPreviewVideo.removeAttribute('src');
+  editorPreviewVideo.load();
   editorEditPanel.classList.add('hidden');
   editorUploadPanel.classList.remove('hidden');
   editorProgressWrap.classList.add('hidden');
@@ -174,8 +602,8 @@ function resetEditor() {
   editorProgressFill.classList.remove('indeterminate');
   editorExportBtn.disabled = false;
   editorExportBtn.textContent = '🎬 Exportar video';
+  renderTimeline();
 }
-
 editorResetBtn.addEventListener('click', resetEditor);
 
 function startEditorElapsedTimer() {
@@ -198,16 +626,18 @@ function showEditorError(msg) {
   editorExportBtn.textContent = '🎬 Exportar video';
 }
 
+// ---- Exportar ----
 editorExportBtn.addEventListener('click', async () => {
   if (clips.length === 0) return;
   for (const clip of clips) {
     if (clip.end <= clip.start) {
-      showEditorError(`El clip "${clip.file.name}" tiene un recorte inválido.`);
+      showEditorError('Uno de los clips tiene un recorte inválido.');
       return;
     }
   }
 
   if (window.requestNotifyPermission) window.requestNotifyPermission();
+  editorPreviewVideo.pause();
   editorExportBtn.disabled = true;
   editorExportBtn.textContent = 'Subiendo...';
   editorErrorPanel.classList.add('hidden');
@@ -224,10 +654,10 @@ editorExportBtn.addEventListener('click', async () => {
   formData.append('metaPreset', editorPresetSel.value);
   formData.append('quality', editorQualitySel.value);
   formData.append('title', editorTitleInput.value.trim());
-  formData.append('overlayEnabled', overlayEnabledChk.checked ? 'true' : 'false');
-  formData.append('overlayText', overlayTextInput.value.trim());
-  formData.append('overlayPosition', overlayPositionSel.value);
-  formData.append('overlayColor', overlayColorInput.value);
+  formData.append(
+    'textOverlays',
+    JSON.stringify(textOverlays.map((o) => ({ text: o.text, start: o.start, end: o.end, position: o.position, color: o.color })))
+  );
 
   try {
     const res = await fetch('/api/edit', { method: 'POST', body: formData });
@@ -308,3 +738,5 @@ function pollEditorStatus(jobId) {
     }
   }, 800);
 }
+
+renderTimeline();

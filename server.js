@@ -750,14 +750,29 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
   const q = QUALITY_BITRATE[quality] || QUALITY_BITRATE.balanced;
   const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.mp4';
 
-  const overlayText = (req.body.overlayText || '').trim().slice(0, 200);
-  const overlayEnabled = req.body.overlayEnabled === 'true' && overlayText.length > 0;
-  const overlayPosition = ['top', 'center', 'bottom'].includes(req.body.overlayPosition)
-    ? req.body.overlayPosition
-    : 'bottom';
-  const overlayColor = /^#?[0-9a-fA-F]{6}$/.test(req.body.overlayColor || '')
-    ? req.body.overlayColor.replace('#', '')
-    : 'FFFFFF';
+  // Textos con su propio tramo de tiempo en la linea de tiempo FINAL (ya
+  // unida): el frontend (editor.js) calcula esos tiempos sumando la duracion
+  // recortada de cada clip anterior, que es exactamente lo que este pipeline
+  // termina produciendo (cada clip se normaliza a 30fps antes de concatenar,
+  // asi que el resultado coincide con esa cuenta). Hasta 10 textos, cada uno
+  // con su rango [start,end) valido.
+  let textOverlays = [];
+  try {
+    textOverlays = JSON.parse(req.body.textOverlays || '[]');
+  } catch {
+    textOverlays = [];
+  }
+  if (!Array.isArray(textOverlays)) textOverlays = [];
+  textOverlays = textOverlays
+    .map((o) => ({
+      text: String((o && o.text) || '').trim().slice(0, 200),
+      start: Math.max(0, Number(o && o.start) || 0),
+      end: Number(o && o.end),
+      position: ['top', 'center', 'bottom'].includes(o && o.position) ? o.position : 'bottom',
+      color: /^#?[0-9a-fA-F]{6}$/.test((o && o.color) || '') ? String(o.color).replace('#', '') : 'FFFFFF',
+    }))
+    .filter((o) => o.text.length > 0 && o.end > o.start)
+    .slice(0, 10);
 
   const { width: W, height: H } = metaPreset;
   const jobId = randomUUID();
@@ -858,17 +873,26 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
       .audioCodec('aac')
       .audioBitrate('128k');
 
-    if (overlayEnabled) {
+    if (textOverlays.length > 0) {
       // OJO: se usa -filter_complex + -map en vez de -vf/-filter:v a
       // proposito. Con este build de ffmpeg, fluent-ffmpeg reordena las
       // opciones y termina poniendo "-acodec/-vcodec" ANTES del filtro; con
       // -vf eso hace que el texto se pierda en silencio (sin ningun error),
       // algo que se detecto probando esto a mano por SSH. Con
       // -filter_complex + -map el orden no afecta y funciona siempre.
-      const yExpr = overlayPosition === 'top' ? 'h*0.08' : overlayPosition === 'center' ? '(h-text_h)/2' : 'h*0.85';
-      const fontSize = Math.round(H * 0.055);
-      const drawtextFilter = `[0:v]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(overlayText)}':fontcolor=0x${overlayColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16[vout]`;
-      command.outputOptions(['-filter_complex', drawtextFilter, '-map', '[vout]', '-map', '0:a?']);
+      // Cada texto es un drawtext encadenado al anterior, cada uno con su
+      // propio "enable=between(t,start,end)" para que solo se vea en su
+      // tramo de tiempo (en vez de un unico texto fijo para todo el video).
+      let lastLabel = '0:v';
+      const parts = textOverlays.map((o, i) => {
+        const yExpr = o.position === 'top' ? 'h*0.08' : o.position === 'center' ? '(h-text_h)/2' : 'h*0.85';
+        const fontSize = Math.round(H * 0.055);
+        const outLabel = `vt${i}`;
+        const part = `[${lastLabel}]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(o.text)}':fontcolor=0x${o.color}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16:enable='between(t,${o.start},${o.end})'[${outLabel}]`;
+        lastLabel = outLabel;
+        return part;
+      });
+      command.outputOptions(['-filter_complex', parts.join(';'), '-map', `[${lastLabel}]`, '-map', '0:a?']);
     }
 
     runJob(jobId, command, [...intermediatePaths, listPath], outputPath, {
@@ -878,6 +902,41 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
       source: 'editor',
     });
   })();
+});
+
+// --- Extraer audio: sube un video y devuelve solo el audio en el formato
+// elegido. Comparte el mismo ciclo de jobs (progreso/cancelar/descargar) que
+// el resto de la app; NO acepta links de YouTube/TikTok/etc, solo archivos
+// que el usuario ya tiene en su dispositivo (ver nota en README/chat sobre
+// por que no se agrego eso).
+app.post('/api/extract-audio', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ningún video.' });
+
+  const format = ['mp3', 'wav', 'm4a'].includes(req.body.format) ? req.body.format : 'mp3';
+  const bitrate = ['128k', '192k', '320k'].includes(req.body.bitrate) ? req.body.bitrate : '192k';
+  const inputPath = req.file.path;
+  const jobId = randomUUID();
+  const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.' + format;
+  const outputPath = path.join(TMP_DIR, `${jobId}.${format}`);
+
+  jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
+  res.json({ jobId });
+
+  const command = ffmpeg(inputPath).noVideo();
+  if (format === 'mp3') {
+    command.audioCodec('libmp3lame').audioBitrate(bitrate);
+  } else if (format === 'wav') {
+    command.audioCodec('pcm_s16le');
+  } else {
+    command.audioCodec('aac').audioBitrate(bitrate);
+  }
+  command.audioFrequency(48000).audioChannels(2);
+
+  runJob(jobId, command, [inputPath], outputPath, {
+    userId: req.session.user.id,
+    downloadName,
+    source: 'audio',
+  });
 });
 
 app.get('/api/status/:jobId', requireAuthApi, (req, res) => {

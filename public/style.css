@@ -458,14 +458,15 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   text-overflow: ellipsis;
   margin-bottom: 6px;
 }
-.clip-row .clip-trim {
+.clip-trim {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   font-size: 0.75rem;
   color: var(--text-dim);
 }
-.clip-row .clip-trim input {
+.clip-trim input {
   width: 64px;
   background: var(--panel);
   color: var(--text);
@@ -889,6 +890,147 @@ select {
   border-radius: 4px;
   font-size: 0.8rem;
 }
+
+/* ---- Mini Editor: vista previa + linea de tiempo estilo CapCut ---- */
+.editor-preview-wrap {
+  position: relative;
+  max-width: 320px;
+  max-height: 420px;
+  margin: 0 auto 10px;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 9 / 16;
+}
+.editor-preview-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+.editor-caption-layer { position: absolute; inset: 0; pointer-events: none; }
+.editor-caption {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90%;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 5px 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 6px;
+  word-break: break-word;
+}
+.editor-caption-top { top: 6%; }
+.editor-caption-center { top: 50%; transform: translate(-50%, -50%); }
+.editor-caption-bottom { bottom: 8%; }
+
+.editor-preview-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.icon-btn-lg { width: 40px; height: 40px; font-size: 1.2rem; }
+
+.editor-timeline {
+  position: relative;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 8px;
+  margin-bottom: 10px;
+  user-select: none;
+}
+.timeline-ruler {
+  height: 12px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: repeating-linear-gradient(90deg, var(--panel-border), var(--panel-border) 1px, transparent 1px, transparent 10%);
+}
+.timeline-clips { position: relative; height: 44px; margin-bottom: 6px; }
+.timeline-text-track { position: relative; height: 26px; }
+.timeline-clip {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  box-sizing: border-box;
+  background: rgba(108, 92, 231, 0.22);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.timeline-clip.selected { background: rgba(108, 92, 231, 0.5); border-color: var(--accent-hover); }
+.timeline-clip-label {
+  font-size: 0.68rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trim-handle {
+  position: absolute;
+  top: 0;
+  width: 9px;
+  height: 100%;
+  cursor: ew-resize;
+  background: rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+.trim-handle-left { left: 0; border-radius: 6px 0 0 6px; }
+.trim-handle-right { right: 0; border-radius: 0 6px 6px 0; }
+.timeline-text-block {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  box-sizing: border-box;
+  background: rgba(46, 204, 113, 0.22);
+  border: 1px solid var(--success);
+  border-radius: 6px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.timeline-text-block.selected { background: rgba(46, 204, 113, 0.5); }
+.timeline-text-label {
+  font-size: 0.65rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--error);
+  pointer-events: none;
+  z-index: 5;
+}
+.editor-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.editor-inspector {
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.editor-inspector input[type="text"] { width: 100%; margin-bottom: 10px; }
 
 /* ---- Reloj con la hora local del dispositivo ---- */
 .clock-pill {

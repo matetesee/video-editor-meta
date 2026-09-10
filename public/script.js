@@ -524,7 +524,7 @@ function showError(msg) {
 document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
-    document.querySelectorAll('#optimizerSection, #editorSection, #historySection').forEach((section) => {
+    document.querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection').forEach((section) => {
       section.classList.toggle('hidden', section.id !== tab.dataset.section);
     });
     if (tab.dataset.section === 'historySection' && window.loadHistory) window.loadHistory();
