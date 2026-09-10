@@ -26,8 +26,17 @@ const {
   createResetToken,
   findByValidResetToken,
   resetPassword,
+  countReferrals,
+  recordVideoHistory,
+  getVideoHistory,
+  getHistoryItem,
+  cleanupExpiredHistory,
+  isAdminEmail,
+  getAdminStats,
+  getAdminUsers,
+  getAdminCoupons,
 } = require('./users');
-const { requireAuthPage, requireAuthApi } = require('./auth');
+const { requireAuthPage, requireAuthApi, requireAdminPage, requireAdminApi } = require('./auth');
 const { sendResetPasswordEmail } = require('./mailer');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -108,7 +117,7 @@ app.get('/api/auth-config', (req, res) => {
 });
 
 app.post('/api/register', async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, referralCode } = req.body || {};
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'Ingresá un email válido.' });
   }
@@ -118,7 +127,7 @@ app.post('/api/register', async (req, res) => {
   try {
     const existing = await findByEmail(email);
     if (existing) return res.status(409).json({ error: 'Ya existe una cuenta con ese email.' });
-    const user = await createUser(email, password);
+    const user = await createUser(email, password, referralCode);
     req.session.user = { id: user.id, email: user.email };
     res.json({ ok: true });
   } catch (err) {
@@ -148,7 +157,15 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
   try {
     const user = await findById(req.session.user.id);
     const quota = await getQuotaStatus(req.session.user.id);
-    res.json({ email: req.session.user.email, avatarUrl: (user && user.avatar_data_url) || null, quota });
+    const referrals = await countReferrals(req.session.user.id);
+    res.json({
+      email: req.session.user.email,
+      avatarUrl: (user && user.avatar_data_url) || null,
+      quota,
+      referralCode: user && user.referral_code,
+      referrals,
+      isAdmin: isAdminEmail(req.session.user.email),
+    });
   } catch (err) {
     res.json({ email: req.session.user.email, avatarUrl: null, quota: null });
   }
@@ -156,10 +173,10 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
 
 app.post('/api/coupon', requireAuthApi, async (req, res) => {
   try {
-    const ok = await applyCoupon(req.session.user.id, req.body && req.body.code);
-    if (!ok) return res.status(400).json({ error: 'Cupón inválido.' });
+    const result = await applyCoupon(req.session.user.id, req.body && req.body.code);
+    if (!result.ok) return res.status(400).json({ error: result.error });
     const quota = await getQuotaStatus(req.session.user.id);
-    res.json({ ok: true, quota });
+    res.json({ ok: true, message: result.message, quota });
   } catch (err) {
     console.error('[coupon]', err.message);
     res.status(500).json({ error: 'No se pudo aplicar el cupón. Probá de nuevo.' });
@@ -248,6 +265,60 @@ app.get('/', requireAuthPage, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'app.html'));
 });
 
+app.get('/admin', requireAuthPage, requireAdminPage, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/api/admin/stats', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    res.json(await getAdminStats());
+  } catch (err) {
+    console.error('[admin/stats]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar las estadísticas.' });
+  }
+});
+
+app.get('/api/admin/users', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    res.json(await getAdminUsers());
+  } catch (err) {
+    console.error('[admin/users]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar la lista de usuarios.' });
+  }
+});
+
+app.get('/api/admin/coupons', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    res.json(await getAdminCoupons());
+  } catch (err) {
+    console.error('[admin/coupons]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar los cupones.' });
+  }
+});
+
+app.get('/api/history', requireAuthApi, async (req, res) => {
+  try {
+    res.json(await getVideoHistory(req.session.user.id));
+  } catch (err) {
+    console.error('[history]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el historial.' });
+  }
+});
+
+app.get('/api/history/:id/download', requireAuthApi, async (req, res) => {
+  try {
+    const item = await getHistoryItem(req.params.id, req.session.user.id);
+    if (!item) return res.status(404).json({ error: 'No encontrado.' });
+    if (!item.file_path || !fs.existsSync(item.file_path)) {
+      return res.status(410).json({ error: 'Este video ya venció (se guardan por 24 horas). Procesalo de nuevo.' });
+    }
+    res.download(item.file_path, item.title);
+  } catch (err) {
+    console.error('[history-download]', err.message);
+    res.status(500).json({ error: 'No se pudo descargar el video.' });
+  }
+});
+
 // Jobs en memoria (instancia unica - MVP). Sirve tanto para el optimizador
 // como para el mini editor: ambos comparten el mismo ciclo de vida
 // (analizando -> procesando -> listo/error/cancelado).
@@ -269,10 +340,13 @@ function setJob(jobId, patch) {
 // Conecta los eventos de un FfmpegCommand ya armado con el ciclo de vida del
 // job (progreso, timeout de seguridad, cancelacion, limpieza de temporales).
 // Lo usan tanto /api/process como /api/edit.
-function runJob(jobId, command, inputPaths, outputPath, progressFrom = 0) {
-  // progressFrom: para jobs con una fase previa (ej. normalizar clips en el
-  // mini editor antes de este encode final), asi la barra sigue subiendo en
-  // vez de saltar de vuelta a 0%.
+// meta: { progressFrom, userId, downloadName, source } — progressFrom es
+// para jobs con una fase previa (ej. normalizar clips en el mini editor
+// antes de este encode final), asi la barra sigue subiendo en vez de saltar
+// de vuelta a 0%; el resto es para poder guardar el resultado en el
+// historial del usuario cuando termina.
+function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
+  const { progressFrom = 0, userId, downloadName, source } = meta;
   let stderrTail = [];
   let killedForTimeout = false;
   const timeoutHandle = setTimeout(() => {
@@ -315,6 +389,15 @@ function runJob(jobId, command, inputPaths, outputPath, progressFrom = 0) {
       try { outputSize = fs.statSync(outputPath).size; } catch {}
       setJob(jobId, { status: 'done', progress: 100, outputPath, outputSize });
       cleanupInputs();
+      if (userId) {
+        recordVideoHistory(userId, {
+          id: jobId,
+          title: downloadName || 'video-editado.mp4',
+          source: source || 'optimizer',
+          outputSize,
+          filePath: outputPath,
+        }).catch((err) => console.error(`[history:${jobId}]`, err.message));
+      }
     })
     .save(outputPath);
 
@@ -559,7 +642,11 @@ app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), a
     }
   }
 
-  runJob(jobId, command, [inputPath], outputPath);
+  runJob(jobId, command, [inputPath], outputPath, {
+    userId: req.session.user.id,
+    downloadName,
+    source: 'optimizer',
+  });
 });
 
 // --- Mini editor: varios clips, recorte por clip, texto quemado opcional ---
@@ -705,7 +792,12 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
       command.outputOptions(['-filter_complex', drawtextFilter, '-map', '[vout]', '-map', '0:a?']);
     }
 
-    runJob(jobId, command, [...intermediatePaths, listPath], outputPath, 40);
+    runJob(jobId, command, [...intermediatePaths, listPath], outputPath, {
+      progressFrom: 40,
+      userId: req.session.user.id,
+      downloadName,
+      source: 'editor',
+    });
   })();
 });
 
@@ -735,21 +827,33 @@ app.post('/api/cancel/:jobId', requireAuthApi, (req, res) => {
 app.get('/api/download/:jobId', requireAuthApi, (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job || job.status !== 'done') return res.status(404).json({ error: 'No disponible todavia.' });
-  res.download(job.outputPath, job.downloadName || 'video-editado.mp4', (err) => {
-    if (!err) {
-      cleanupFile(job.outputPath);
-      jobs.delete(req.params.jobId);
-    }
-  });
+  // No se borra el archivo despues de servirlo: el mismo jobId queda
+  // disponible para re-descargar desde el Historial durante 24hs (ver
+  // recordVideoHistory / cleanupExpiredHistory), en vez de perderse apenas
+  // se baja una vez.
+  res.download(job.outputPath, job.downloadName || 'video-editado.mp4');
 });
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+
+// Barrido periodico: borra del disco los videos del historial que ya
+// pasaron sus 24hs de vida, y su fila en la base.
+const HISTORY_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
+function runHistoryCleanup() {
+  cleanupExpiredHistory(cleanupFile)
+    .then((n) => {
+      if (n > 0) console.log(`[history-cleanup] se borraron ${n} video(s) vencido(s).`);
+    })
+    .catch((err) => console.error('[history-cleanup]', err.message));
+}
 
 initDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Video editor corriendo en puerto ${PORT}`);
     });
+    runHistoryCleanup();
+    setInterval(runHistoryCleanup, HISTORY_CLEANUP_INTERVAL_MS);
   })
   .catch((err) => {
     console.error('No se pudo inicializar la base de datos:', err.message);

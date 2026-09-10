@@ -35,6 +35,14 @@ function setTab(tab) {
 
 loginTabs.forEach((btn) => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
 
+// Si vino de un link de invitacion (?ref=CODIGO), precarga el codigo y
+// abre directo la pestaña de registro para no hacerle buscar nada.
+const refCode = new URLSearchParams(window.location.search).get('ref');
+if (refCode) {
+  document.getElementById('registerReferral').value = refCode;
+  setTab('register');
+}
+
 // El botón de Google solo se muestra si el servidor tiene las credenciales
 // configuradas (si no, quedaría un botón roto).
 fetch('/api/auth-config')
@@ -98,6 +106,7 @@ registerForm.addEventListener('submit', async (e) => {
   const email = document.getElementById('registerEmail').value.trim();
   const password = document.getElementById('registerPassword').value;
   const password2 = document.getElementById('registerPassword2').value;
+  const referralCode = document.getElementById('registerReferral').value.trim();
 
   if (password !== password2) {
     showError('Las contraseñas no coinciden.');
@@ -111,7 +120,7 @@ registerForm.addEventListener('submit', async (e) => {
     const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, referralCode }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'No se pudo crear la cuenta.');

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iniciar sesión - Editor de Video de Dematiu</title>
 <link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
 <body>
   <div class="login-wrap">
@@ -64,6 +65,10 @@
         <div class="control-group">
           <label for="registerPassword2">Repetir contraseña</label>
           <input type="password" id="registerPassword2" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="control-group">
+          <label for="registerReferral">Código de invitación (opcional)</label>
+          <input type="text" id="registerReferral" placeholder="Si alguien te invitó, ponelo acá">
         </div>
         <button type="submit" class="btn-primary login-submit" id="registerBtn">Crear cuenta</button>
       </form>

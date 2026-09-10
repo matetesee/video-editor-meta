@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor de Video de Dematiu Para Meta</title>
 <link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
 <body>
   <div class="app">
@@ -16,6 +17,8 @@
       </label>
       <span id="sessionUser"></span>
       <span class="quota-pill" id="quotaPill" title="Videos disponibles hoy"></span>
+      <a id="adminLink" href="/admin" class="icon-btn hidden" title="Panel de admin">🛠️</a>
+      <button id="themeToggleBtn" class="icon-btn" title="Cambiar tema">☀️</button>
       <button id="settingsBtn" class="icon-btn" title="Configuración">⚙️</button>
       <button id="logoutBtn" class="link-btn">Cerrar sesión</button>
     </div>
@@ -27,6 +30,7 @@
     <nav class="section-tabs">
       <button type="button" class="section-tab active" data-section="optimizerSection">🎯 Optimizador Meta</button>
       <button type="button" class="section-tab" data-section="editorSection">✂️ Mini Editor</button>
+      <button type="button" class="section-tab" data-section="historySection">📁 Historial</button>
     </nav>
 
     <main>
@@ -204,6 +208,14 @@
           <div class="error hidden" id="editorErrorPanel"></div>
         </section>
       </div>
+
+      <div id="historySection" class="hidden">
+        <section class="panel">
+          <p class="meta-hint" style="margin-top:0;">Tus videos procesados quedan disponibles para volver a descargar durante 24 horas.</p>
+          <div id="historyList"></div>
+          <p class="empty-hint hidden" id="historyEmpty">Todavía no procesaste ningún video.</p>
+        </section>
+      </div>
     </main>
 
     <footer class="fun-footer">
@@ -238,6 +250,16 @@
         </div>
         <p class="error hidden" id="couponError"></p>
       </div>
+
+      <div class="coupon-box">
+        <label>🎁 Invitá y ganá</label>
+        <p class="meta-hint" style="margin:0 0 10px;">Compartí tu código: cuando alguien se registre con él, ambos ganan 3 videos extra.</p>
+        <div class="coupon-row">
+          <input type="text" id="referralCodeDisplay" readonly>
+          <button type="button" id="referralCopyBtn" class="btn-secondary">Copiar</button>
+        </div>
+        <p class="meta-hint" id="referralCount" style="margin:10px 0 0;"></p>
+      </div>
     </div>
   </div>
 
@@ -246,7 +268,7 @@
     <div class="celebration-box">
       <div class="celebration-emoji">🎉</div>
       <h2>¡Felicitaciones!</h2>
-      <p>Activaste el plan ilimitado en esta cuenta. A partir de ahora podés cargar todos los videos que quieras, sin límite diario.</p>
+      <p id="celebrationMessage">Activaste el plan ilimitado en esta cuenta.</p>
       <button type="button" id="celebrationCloseBtn" class="btn-primary">¡Genial!</button>
     </div>
   </div>

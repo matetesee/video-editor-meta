@@ -8,6 +8,22 @@
   --text-dim: #9a9fae;
   --success: #2ecc71;
   --error: #ff5c5c;
+  --input-bg: #1f2330;
+}
+
+/* Tema claro: se activa con data-theme="light" en <html> (ver theme.js).
+   Sin ese atributo se usa el oscuro de arriba, que sigue siendo el default. */
+:root[data-theme='light'] {
+  --bg: #f2f3f7;
+  --panel: #ffffff;
+  --panel-border: #dfe1e8;
+  --accent: #6c5ce7;
+  --accent-hover: #5b4bd1;
+  --text: #1a1d24;
+  --text-dim: #6b7280;
+  --success: #16a34a;
+  --error: #dc2626;
+  --input-bg: #f2f3f7;
 }
 
 * { box-sizing: border-box; }
@@ -40,7 +56,7 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: #1f2330;
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   display: flex;
   align-items: center;
@@ -79,6 +95,10 @@ body {
   cursor: pointer;
   flex-shrink: 0;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 .icon-btn:hover { color: var(--text); border-color: var(--accent); }
 
@@ -190,7 +210,7 @@ body {
   letter-spacing: 0.03em;
 }
 .login-card input {
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -232,7 +252,7 @@ body {
 .login-tabs {
   display: flex;
   gap: 6px;
-  background: #1f2330;
+  background: var(--input-bg);
   border-radius: 10px;
   padding: 4px;
   margin-bottom: 20px;
@@ -352,7 +372,7 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
 }
 #videoTitle {
   width: 100%;
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -364,11 +384,51 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   border-color: var(--accent);
 }
 
+.empty-hint {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  padding: 30px 0;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.history-row .history-info { flex: 1; min-width: 0; }
+.history-row .history-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-row .history-meta {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+.history-row .btn-primary {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.history-row.expired .btn-primary {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .clip-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #1f2330;
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   padding: 12px 14px;
@@ -449,7 +509,7 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   gap: 10px;
 }
 .overlay-controls input[type="text"] {
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -463,7 +523,7 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
 }
 .overlay-row select {
   flex: 1;
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -521,7 +581,7 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   letter-spacing: 0.03em;
 }
 select {
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -533,7 +593,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -587,7 +647,7 @@ select {
 #elapsedText { color: var(--text-dim); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
 .progress-bar {
   height: 10px;
-  background: #1f2330;
+  background: var(--input-bg);
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 12px;
@@ -707,7 +767,7 @@ select {
 .coupon-row { display: flex; gap: 8px; }
 .coupon-row input {
   flex: 1;
-  background: #1f2330;
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 8px;
@@ -760,4 +820,50 @@ select {
 @keyframes celebration-bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
+}
+
+/* ===== Panel de admin ===== */
+.admin-app { max-width: 960px; }
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value { font-size: 1.6rem; font-weight: 800; color: var(--accent); }
+.stat-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.table-wrap th, .table-wrap td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+}
+.table-wrap th {
+  background: var(--input-bg);
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.table-wrap tr:last-child td { border-bottom: none; }
+.table-wrap code {
+  background: var(--input-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
 }

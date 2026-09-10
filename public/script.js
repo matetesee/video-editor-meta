@@ -40,6 +40,13 @@ const couponApplyBtn = document.getElementById('couponApplyBtn');
 const couponError = document.getElementById('couponError');
 const celebrationOverlay = document.getElementById('celebrationOverlay');
 const celebrationCloseBtn = document.getElementById('celebrationCloseBtn');
+const celebrationMessage = document.getElementById('celebrationMessage');
+const adminLink = document.getElementById('adminLink');
+const referralCodeDisplay = document.getElementById('referralCodeDisplay');
+const referralCopyBtn = document.getElementById('referralCopyBtn');
+const referralCount = document.getElementById('referralCount');
+const historyList = document.getElementById('historyList');
+const historyEmpty = document.getElementById('historyEmpty');
 
 let currentEmail = '';
 
@@ -59,19 +66,18 @@ function renderQuota(quota) {
     quotaPill.textContent = '';
     quotaPill.className = 'quota-pill hidden';
     settingsQuota.textContent = '';
-    couponBox.classList.remove('hidden');
     return;
   }
   if (quota.unlimited) {
     quotaPill.textContent = '✨ Ilimitado';
     quotaPill.className = 'quota-pill unlimited';
-    settingsQuota.textContent = '✨ Plan ilimitado (cupón activo)';
-    couponBox.classList.add('hidden'); // ya no hace falta poner otro cupón
+    settingsQuota.textContent = quota.until
+      ? `✨ Ilimitado hasta ${new Date(quota.until).toLocaleDateString('es-AR')}`
+      : '✨ Plan ilimitado';
   } else {
     quotaPill.textContent = `${quota.remaining}/${quota.limit} hoy`;
     quotaPill.className = 'quota-pill' + (quota.remaining === 0 ? ' low' : '');
-    settingsQuota.textContent = `${quota.used} de ${quota.limit} videos usados hoy (se resetea a medianoche)`;
-    couponBox.classList.remove('hidden');
+    settingsQuota.textContent = `${quota.used} de ${quota.limit} videos usados hoy` + (quota.bonus > 0 ? ` (+${quota.bonus} extra)` : '') + ' (se resetea a medianoche)';
   }
 }
 
@@ -85,10 +91,27 @@ function renderQuota(quota) {
     settingsEmail.textContent = data.email;
     setAvatar(data.avatarUrl);
     renderQuota(data.quota);
+    if (referralCodeDisplay) referralCodeDisplay.value = data.referralCode || '';
+    if (referralCount) referralCount.textContent = `Ya invitaste a ${data.referrals || 0} persona(s).`;
+    if (data.isAdmin && adminLink) adminLink.classList.remove('hidden');
   } catch (err) {
     // si falla la consulta, no bloqueamos el uso de la pagina
   }
 })();
+
+if (referralCopyBtn) {
+  referralCopyBtn.addEventListener('click', async () => {
+    const link = `${window.location.origin}/login?ref=${referralCodeDisplay.value}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      referralCopyBtn.textContent = '¡Copiado!';
+    } catch (err) {
+      referralCodeDisplay.select();
+      referralCopyBtn.textContent = 'Seleccionado';
+    }
+    setTimeout(() => (referralCopyBtn.textContent = 'Copiar'), 1500);
+  });
+}
 
 settingsBtn.addEventListener('click', () => {
   couponError.classList.add('hidden');
@@ -116,7 +139,7 @@ couponApplyBtn.addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.error || 'Cupón inválido.');
     renderQuota(data.quota);
     settingsOverlay.classList.add('hidden');
-    showCelebration();
+    showCelebration(data.message);
   } catch (err) {
     couponError.textContent = '❌ ' + err.message;
     couponError.classList.remove('hidden');
@@ -126,7 +149,8 @@ couponApplyBtn.addEventListener('click', async () => {
   }
 });
 
-function showCelebration() {
+function showCelebration(message) {
+  celebrationMessage.textContent = message || 'Activaste una mejora en tu cuenta.';
   celebrationOverlay.classList.remove('hidden');
   if (window.fireConfetti) {
     window.fireConfetti();
@@ -409,13 +433,14 @@ function showError(msg) {
   processBtn.textContent = '⚙️ Procesar video';
 }
 
-// ---- Navegación entre secciones (Optimizador / Mini Editor) ----
+// ---- Navegación entre secciones (Optimizador / Mini Editor / Historial) ----
 document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
-    document.querySelectorAll('#optimizerSection, #editorSection').forEach((section) => {
+    document.querySelectorAll('#optimizerSection, #editorSection, #historySection').forEach((section) => {
       section.classList.toggle('hidden', section.id !== tab.dataset.section);
     });
+    if (tab.dataset.section === 'historySection' && window.loadHistory) window.loadHistory();
   });
 });
 
@@ -432,5 +457,46 @@ window.fireConfetti = function fireConfetti() {
     `;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3000);
+  }
+};
+
+// ---- Historial de videos ----
+function formatHistoryDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+window.loadHistory = async function loadHistory() {
+  historyList.innerHTML = '<p class="empty-hint">Cargando...</p>';
+  historyEmpty.classList.add('hidden');
+  try {
+    const res = await fetch('/api/history');
+    if (res.status === 401) return (window.location.href = '/login');
+    const items = await res.json();
+    historyList.innerHTML = '';
+    if (!items.length) {
+      historyEmpty.classList.remove('hidden');
+      return;
+    }
+    items.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'history-row' + (item.available ? '' : ' expired');
+      const sourceLabel = item.source === 'editor' ? 'Mini Editor' : 'Optimizador';
+      row.innerHTML = `
+        <div class="history-info">
+          <div class="history-title">${item.title}</div>
+          <div class="history-meta">${sourceLabel} · ${formatBytes(item.output_size)} · ${formatHistoryDate(item.created_at)}</div>
+        </div>
+        <button type="button" class="btn-primary" data-id="${item.id}">⬇️ Descargar</button>
+      `;
+      row.querySelector('button').addEventListener('click', () => {
+        window.location.href = `/api/history/${item.id}/download`;
+      });
+      historyList.appendChild(row);
+    });
+  } catch (err) {
+    historyList.innerHTML = '';
+    historyEmpty.textContent = 'No se pudo cargar el historial.';
+    historyEmpty.classList.remove('hidden');
   }
 };
