@@ -912,20 +912,24 @@ select {
 .editor-caption-layer { position: absolute; inset: 0; pointer-events: none; }
 .editor-caption {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   max-width: 90%;
   text-align: center;
   font-weight: 700;
   font-size: 1rem;
-  padding: 5px 12px;
-  background: rgba(0, 0, 0, 0.45);
+  padding: 4px 8px;
   border-radius: 6px;
   word-break: break-word;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  cursor: move;
+  touch-action: none;
 }
-.editor-caption-top { top: 6%; }
-.editor-caption-center { top: 50%; transform: translate(-50%, -50%); }
-.editor-caption-bottom { bottom: 8%; }
+.editor-caption.has-box {
+  background: rgba(0, 0, 0, 0.45);
+  text-shadow: none;
+}
+.editor-caption.selected { outline: 2px dashed rgba(255, 255, 255, 0.6); outline-offset: 3px; }
 
 .editor-preview-controls {
   display: flex;

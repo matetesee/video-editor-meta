@@ -145,10 +145,11 @@
         <section class="panel hidden" id="editorEditPanel">
           <p class="section-label">1. Vista previa y línea de tiempo</p>
 
-          <div class="editor-preview-wrap">
-            <video id="editorPreviewVideo" playsinline muted></video>
+          <div class="editor-preview-wrap" id="editorPreviewWrap">
+            <video id="editorPreviewVideo" playsinline></video>
             <div class="editor-caption-layer" id="editorCaptionLayer"></div>
           </div>
+          <p class="meta-hint" style="text-align:center;margin-top:6px;">Arrastrá el texto directo sobre el video para ubicarlo donde quieras.</p>
           <div class="editor-preview-controls">
             <button type="button" id="editorPlayBtn" class="icon-btn icon-btn-lg" title="Reproducir/Pausar">▶️</button>
             <span id="editorTimeLabel">0:00 / 0:00</span>
@@ -182,11 +183,9 @@
             <p class="section-label" style="margin-top:0;">Texto seleccionado</p>
             <input type="text" id="textInspectorText" placeholder="Ej: 50% OFF hoy" maxlength="200">
             <div class="overlay-row">
-              <select id="textInspectorPosition">
-                <option value="top">Arriba</option>
-                <option value="center">Centro</option>
-                <option value="bottom" selected>Abajo</option>
-              </select>
+              <label class="overlay-toggle-label" style="margin:0;">
+                <input type="checkbox" id="textInspectorBox"> Fondo detrás del texto
+              </label>
               <input type="color" id="textInspectorColor" value="#ffffff">
             </div>
             <div class="clip-trim">

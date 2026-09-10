@@ -25,6 +25,7 @@ const editorDownloadLink = document.getElementById('editorDownloadLink');
 const editorErrorPanel = document.getElementById('editorErrorPanel');
 
 // Vista previa + linea de tiempo
+const editorPreviewWrap = document.getElementById('editorPreviewWrap');
 const editorPreviewVideo = document.getElementById('editorPreviewVideo');
 const editorCaptionLayer = document.getElementById('editorCaptionLayer');
 const editorPlayBtn = document.getElementById('editorPlayBtn');
@@ -44,13 +45,13 @@ const clipStartInput = document.getElementById('clipStartInput');
 const clipEndInput = document.getElementById('clipEndInput');
 const textInspector = document.getElementById('textInspector');
 const textInspectorText = document.getElementById('textInspectorText');
-const textInspectorPosition = document.getElementById('textInspectorPosition');
+const textInspectorBox = document.getElementById('textInspectorBox');
 const textInspectorColor = document.getElementById('textInspectorColor');
 const textStartInput = document.getElementById('textStartInput');
 const textEndInput = document.getElementById('textEndInput');
 
 let clips = []; // { id, file, objectUrl, duration, start, end }
-let textOverlays = []; // { id, text, start, end (tiempo GLOBAL, ya unido), position, color (sin '#') }
+let textOverlays = []; // { id, text, start, end (tiempo GLOBAL, ya unido), xPct, yPct (posicion libre 0-100), box, color (sin '#') }
 let selectedClipId = null;
 let selectedTextId = null;
 let clipRangesCache = []; // [{ clip, globalStart, globalEnd }]
@@ -129,6 +130,14 @@ function wireDrag(el, onStart, onMove, onEnd) {
   });
 }
 
+// IMPORTANTE: mientras se arrastra un handle NO se puede llamar a
+// renderTimeline() en cada movimiento, porque esa funcion hace
+// innerHTML='' y recrea todos los bloques (incluido el handle que tiene el
+// pointer capture activo en este momento) — el navegador pierde la captura
+// apenas el elemento se saca del DOM, y el arrastre se corta a los pocos
+// pixeles ("se mueve apenas"). Por eso durante el drag solo se reposicionan
+// los bloques ya existentes (updateClipAndTextPositions), y el
+// renderTimeline() completo se hace recien al soltar.
 function wireClipTrimHandle(handleEl, clip, edge) {
   wireDrag(
     handleEl,
@@ -145,9 +154,12 @@ function wireClipTrimHandle(handleEl, clip, edge) {
       } else {
         clip.end = Math.min(clip.duration, Math.max(ctx.end + deltaTime, clip.start + 0.2));
       }
-      renderTimeline();
+      updateClipAndTextPositions();
     },
-    () => seekGlobal(playheadTime)
+    () => {
+      renderTimeline();
+      seekGlobal(playheadTime);
+    }
   );
 }
 
@@ -171,9 +183,9 @@ function wireTextBlockDrag(blockEl, overlay) {
       const newStart = Math.max(0, Math.min(ctx.total - ctx.dur, ctx.start + deltaTime));
       overlay.start = newStart;
       overlay.end = newStart + ctx.dur;
-      renderTimeline();
+      updateClipAndTextPositions();
     },
-    () => {}
+    () => renderTimeline()
   );
 }
 
@@ -193,10 +205,40 @@ function wireTextHandle(handleEl, overlay, edge) {
       } else {
         overlay.end = Math.min(ctx.total, Math.max(ctx.end + deltaTime, overlay.start + 0.3));
       }
-      renderTimeline();
+      updateClipAndTextPositions();
     },
-    () => {}
+    () => renderTimeline()
   );
+}
+
+// Reposiciona (sin recrear) los bloques de clips/texto ya existentes en el
+// DOM durante un drag, y de paso recalcula clipRangesCache. Mucho mas barato
+// que un renderTimeline() completo y no rompe el pointer capture activo.
+function updateClipAndTextPositions() {
+  const total = totalDuration() || 1;
+  let cursor = 0;
+  clipRangesCache = clips.map((clip) => {
+    const dur = Math.max(0, clip.end - clip.start);
+    const r = { clip, globalStart: cursor, globalEnd: cursor + dur };
+    cursor += dur;
+    return r;
+  });
+  const clipEls = timelineClipsEl.children;
+  clipRangesCache.forEach((r, i) => {
+    const el = clipEls[i];
+    if (!el) return;
+    el.style.left = ((r.globalStart / total) * 100) + '%';
+    el.style.width = (((r.globalEnd - r.globalStart) / total) * 100) + '%';
+  });
+  const textEls = timelineTextTrackEl.children;
+  textOverlays.forEach((ov, i) => {
+    const el = textEls[i];
+    if (!el) return;
+    el.style.left = ((ov.start / total) * 100) + '%';
+    el.style.width = (((ov.end - ov.start) / total) * 100) + '%';
+  });
+  updatePlayheadPosition();
+  updateTimeLabel();
 }
 
 function wireRulerScrub() {
@@ -280,12 +322,41 @@ function renderCaptionLayer() {
   editorCaptionLayer.innerHTML = '';
   textOverlays.forEach((ov) => {
     const el = document.createElement('div');
-    el.className = 'editor-caption editor-caption-' + ov.position;
+    el.className = 'editor-caption' + (ov.box ? ' has-box' : '') + (ov.id === selectedTextId ? ' selected' : '');
+    el.style.left = ov.xPct + '%';
+    el.style.top = ov.yPct + '%';
     el.style.color = '#' + ov.color;
     el.textContent = ov.text;
     el.dataset.id = ov.id;
     el.hidden = true;
+    wireCaptionDrag(el, ov);
     editorCaptionLayer.appendChild(el);
+  });
+}
+
+// Arrastrar el texto directo sobre la vista previa para ubicarlo donde
+// quieras (coordenadas libres, no solo arriba/centro/abajo).
+function wireCaptionDrag(el, overlay) {
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    selectText(overlay.id);
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    const rect = editorPreviewWrap.getBoundingClientRect();
+    const move = (ev) => {
+      const xPct = Math.max(4, Math.min(96, ((ev.clientX - rect.left) / rect.width) * 100));
+      const yPct = Math.max(4, Math.min(96, ((ev.clientY - rect.top) / rect.height) * 100));
+      overlay.xPct = xPct;
+      overlay.yPct = yPct;
+      el.style.left = xPct + '%';
+      el.style.top = yPct + '%';
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
   });
 }
 
@@ -323,7 +394,7 @@ function updateInspectors() {
   }
   if (text) {
     if (document.activeElement !== textInspectorText) textInspectorText.value = text.text;
-    textInspectorPosition.value = text.position;
+    textInspectorBox.checked = !!text.box;
     textInspectorColor.value = '#' + text.color;
     if (document.activeElement !== textStartInput) textStartInput.value = text.start.toFixed(1);
     if (document.activeElement !== textEndInput) textEndInput.value = text.end.toFixed(1);
@@ -509,7 +580,7 @@ addTextBtn.addEventListener('click', () => {
   if (total <= 0) return;
   const start = Math.max(0, Math.min(playheadTime, total - 0.5));
   const end = Math.min(total, start + 2);
-  const overlay = { id: uid(), text: 'Tu texto acá', start, end, position: 'bottom', color: 'ffffff' };
+  const overlay = { id: uid(), text: 'Tu texto acá', start, end, xPct: 50, yPct: 85, box: false, color: 'ffffff' };
   textOverlays.push(overlay);
   selectedTextId = overlay.id;
   selectedClipId = null;
@@ -540,10 +611,10 @@ textInspectorText.addEventListener('input', () => {
   text.text = textInspectorText.value.slice(0, 200);
   renderTimeline();
 });
-textInspectorPosition.addEventListener('change', () => {
+textInspectorBox.addEventListener('change', () => {
   const text = textOverlays.find((t) => t.id === selectedTextId);
   if (!text) return;
-  text.position = textInspectorPosition.value;
+  text.box = textInspectorBox.checked;
   renderTimeline();
 });
 textInspectorColor.addEventListener('input', () => {
@@ -656,7 +727,9 @@ editorExportBtn.addEventListener('click', async () => {
   formData.append('title', editorTitleInput.value.trim());
   formData.append(
     'textOverlays',
-    JSON.stringify(textOverlays.map((o) => ({ text: o.text, start: o.start, end: o.end, position: o.position, color: o.color })))
+    JSON.stringify(
+      textOverlays.map((o) => ({ text: o.text, start: o.start, end: o.end, xPct: o.xPct, yPct: o.yPct, box: o.box, color: o.color }))
+    )
   );
 
   try {

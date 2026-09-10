@@ -768,7 +768,11 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
       text: String((o && o.text) || '').trim().slice(0, 200),
       start: Math.max(0, Number(o && o.start) || 0),
       end: Number(o && o.end),
-      position: ['top', 'center', 'bottom'].includes(o && o.position) ? o.position : 'bottom',
+      // xPct/yPct: posicion libre (0-100) elegida arrastrando el texto sobre
+      // la vista previa, en vez de un preset fijo arriba/centro/abajo.
+      xPct: Math.max(0, Math.min(100, Number(o && o.xPct))) || 50,
+      yPct: Math.max(0, Math.min(100, Number(o && o.yPct))) || 85,
+      box: !!(o && o.box),
       color: /^#?[0-9a-fA-F]{6}$/.test((o && o.color) || '') ? String(o.color).replace('#', '') : 'FFFFFF',
     }))
     .filter((o) => o.text.length > 0 && o.end > o.start)
@@ -883,12 +887,18 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
       // Cada texto es un drawtext encadenado al anterior, cada uno con su
       // propio "enable=between(t,start,end)" para que solo se vea en su
       // tramo de tiempo (en vez de un unico texto fijo para todo el video).
+      // x/y salen de la posicion libre (xPct/yPct) que se eligio arrastrando
+      // el texto sobre la vista previa, centrado en ese punto; el fondo
+      // (box) es opcional, por defecto no lleva (solo el texto, con una
+      // sombra para que se lea igual sobre fondos claros).
       let lastLabel = '0:v';
       const parts = textOverlays.map((o, i) => {
-        const yExpr = o.position === 'top' ? 'h*0.08' : o.position === 'center' ? '(h-text_h)/2' : 'h*0.85';
+        const xExpr = `(w*${(o.xPct / 100).toFixed(4)})-text_w/2`;
+        const yExpr = `(h*${(o.yPct / 100).toFixed(4)})-text_h/2`;
         const fontSize = Math.round(H * 0.055);
         const outLabel = `vt${i}`;
-        const part = `[${lastLabel}]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(o.text)}':fontcolor=0x${o.color}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yExpr}:box=1:boxcolor=black@0.45:boxborderw=16:enable='between(t,${o.start},${o.end})'[${outLabel}]`;
+        const boxPart = o.box ? ':box=1:boxcolor=black@0.45:boxborderw=16' : ':shadowcolor=black@0.7:shadowx=2:shadowy=2';
+        const part = `[${lastLabel}]drawtext=fontfile='${DRAWTEXT_FONT_FILE}':text='${escapeDrawtext(o.text)}':fontcolor=0x${o.color}:fontsize=${fontSize}:x=${xExpr}:y=${yExpr}${boxPart}:enable='between(t,${o.start},${o.end})'[${outLabel}]`;
         lastLabel = outLabel;
         return part;
       });
