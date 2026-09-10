@@ -146,6 +146,110 @@ body {
   color: #fff;
 }
 
+/* ---- Layout con menu lateral (sidebar) ---- */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: stretch;
+}
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  padding: 22px 0 16px;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 20px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 14px;
+}
+.sidebar-brand-icon { font-size: 1.5rem; }
+.sidebar-brand-text small { font-weight: 500; color: var(--text-dim); font-size: 0.7rem; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; flex: 1; }
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sidebar-item span { overflow: hidden; text-overflow: ellipsis; }
+/* Pisa el estilo "pildora horizontal" de .section-tab: acá va vertical, a
+   todo el ancho, alineado a la izquierda. */
+.sidebar-item.section-tab {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+}
+.sidebar-item.section-tab:hover { background: var(--input-bg); border-color: transparent; color: var(--text); }
+.sidebar-item.section-tab.active {
+  background: rgba(108, 92, 231, 0.15);
+  color: var(--accent-hover);
+}
+.sidebar-link { color: var(--text-dim); }
+.sidebar-link:hover { background: var(--input-bg); color: var(--text); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px 16px 0;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sidebar-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.sidebar-user { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sidebar-user-email {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-footer-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sidebar-footer-actions .link-btn { margin-left: auto; }
+
+.app-main { flex: 1; min-width: 0; }
+.app-main .app { max-width: 720px; }
+
+@media (max-width: 860px) {
+  .app-shell { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    gap: 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .sidebar-brand { padding: 0 12px 0 0; border-bottom: none; margin-bottom: 0; border-right: 1px solid var(--panel-border); }
+  .sidebar-brand-text br { display: none; }
+  .sidebar-nav { flex-direction: row; flex: 1; overflow-x: auto; padding: 0; }
+  .sidebar-item span { display: none; }
+  .sidebar-item { width: auto; padding: 10px; }
+  .sidebar-footer { margin-top: 0; padding: 0; border-top: none; flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .sidebar-user-email { display: none; }
+}
+
 .fun-footer {
   text-align: center;
   color: var(--text-dim);
@@ -1114,6 +1218,101 @@ select {
 .mini-plan-card h4 { margin: 0 0 6px; font-size: 0.9rem; }
 .mini-plan-card .mini-plan-price { font-weight: 800; font-size: 1.15rem; margin-bottom: 10px; }
 .mini-plan-card button { width: 100%; }
+
+/* ---- Actualizaciones (changelog) ---- */
+.updates-title { margin: 0 0 4px; font-size: 1.4rem; }
+.update-featured {
+  display: flex;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 22px;
+  margin-bottom: 32px;
+}
+.update-featured-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+.update-featured-body { flex: 1; min-width: 0; }
+.update-featured-title { margin: 8px 0 8px; font-size: 1.3rem; }
+.update-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-hover);
+}
+.update-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.update-card-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--panel-border); }
+.update-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.update-badge-feature { background: rgba(108, 92, 231, 0.15); color: var(--accent-hover); }
+.update-badge-improvement { background: rgba(46, 204, 113, 0.15); color: var(--success); }
+.update-badge-fix { background: rgba(255, 149, 0, 0.15); color: #ff9500; }
+.update-date { font-size: 0.75rem; color: var(--text-dim); }
+.update-tag {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+.update-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.update-desc { margin: 0; color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; }
+
+.updates-timeline { position: relative; padding-left: 22px; }
+.updates-timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--panel-border);
+}
+.updates-month-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin: 24px 0 10px;
+}
+.updates-month-label:first-child { margin-top: 0; }
+.update-row { position: relative; margin-bottom: 14px; }
+.update-row-dot {
+  position: absolute;
+  left: -22px;
+  top: 18px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+.update-row-dot.update-badge-feature { background: var(--accent); }
+.update-row-dot.update-badge-improvement { background: var(--success); }
+.update-row-dot.update-badge-fix { background: #ff9500; }
+.update-row .update-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.update-title { margin: 4px 0 8px; font-size: 1rem; }
 
 /* ---- Reloj con la hora local del dispositivo ---- */
 .clock-pill {

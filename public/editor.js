@@ -163,12 +163,28 @@ function wireClipTrimHandle(handleEl, clip, edge) {
   );
 }
 
+// Selecciona un texto SIN pasar por renderTimeline() (que hace innerHTML=''
+// y recrearia el bloque/el globo que se esta por arrastrar, matando el
+// arrastre en el primer frame). Solo toca las clases "selected" a mano; el
+// renderTimeline() completo se hace igual al soltar (onEnd), que ya
+// resincroniza todo (inspector, etc.).
+function selectTextNoRender(id) {
+  selectedTextId = id;
+  selectedClipId = null;
+  document.querySelectorAll('.timeline-text-block.selected, .editor-caption.selected').forEach((el) => el.classList.remove('selected'));
+  const idx = textOverlays.findIndex((o) => o.id === id);
+  const blockEl = timelineTextTrackEl.children[idx];
+  if (blockEl) blockEl.classList.add('selected');
+  const capEl = editorCaptionLayer.querySelector(`[data-id="${id}"]`);
+  if (capEl) capEl.classList.add('selected');
+}
+
 function wireTextBlockDrag(blockEl, overlay) {
   wireDrag(
     blockEl,
     (e) => {
       if (e.target.classList.contains('trim-handle')) return { skip: true };
-      selectText(overlay.id);
+      selectTextNoRender(overlay.id);
       return {
         skip: false,
         total: totalDuration(),
@@ -335,12 +351,17 @@ function renderCaptionLayer() {
 }
 
 // Arrastrar el texto directo sobre la vista previa para ubicarlo donde
-// quieras (coordenadas libres, no solo arriba/centro/abajo).
+// quieras (coordenadas libres, no solo arriba/centro/abajo). OJO: antes esto
+// llamaba a selectText(), que dispara un renderTimeline() completo — eso
+// hace innerHTML='' sobre editorCaptionLayer y recrea este mismo "el" en el
+// momento exacto en que se lo esta por arrastrar, matando el drag antes de
+// que arranque (por eso no se movia nunca). Ahora selecciona "en frio" con
+// selectTextNoRender y recien renderiza todo al soltar.
 function wireCaptionDrag(el, overlay) {
   el.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    selectText(overlay.id);
+    selectTextNoRender(overlay.id);
     try { el.setPointerCapture(e.pointerId); } catch {}
     const rect = editorPreviewWrap.getBoundingClientRect();
     const move = (ev) => {
@@ -354,6 +375,7 @@ function wireCaptionDrag(el, overlay) {
     const up = () => {
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
+      renderTimeline();
     };
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);

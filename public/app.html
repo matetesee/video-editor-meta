@@ -8,38 +8,55 @@
 <script src="theme.js"></script>
 </head>
 <body>
-  <div class="app">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-icon">🎬</span>
+        <span class="sidebar-brand-text">Editor de Video<br><small>de Dematiu</small></span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button type="button" class="section-tab sidebar-item active" data-section="optimizerSection">🎯 <span>Optimizador Meta</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="editorSection">✂️ <span>Mini Editor</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="audioSection">🎧 <span>Extraer Audio</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="historySection">📁 <span>Historial</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="updatesSection">📣 <span>Actualizaciones</span></button>
+        <a href="/precios" class="sidebar-item sidebar-link">💳 <span>Planes</span></a>
+        <a id="adminLink" href="/admin" class="sidebar-item sidebar-link hidden">🛠️ <span>Admin</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-pills">
+          <span class="clock-pill" id="clockPill" title=""></span>
+          <span class="streak-pill hidden" id="streakPill" title="Días seguidos usando la app"></span>
+          <span class="quota-pill" id="quotaPill" title="Videos disponibles hoy"></span>
+        </div>
+        <div class="sidebar-user">
+          <label class="avatar-upload" id="avatarUpload" title="Cambiar foto de perfil">
+            <img id="avatarImg" src="" alt="" hidden>
+            <span id="avatarFallback">🧑</span>
+            <input type="file" id="avatarInput" accept="image/*" hidden>
+          </label>
+          <span id="sessionUser" class="sidebar-user-email"></span>
+        </div>
+        <div class="sidebar-footer-actions">
+          <button id="themeToggleBtn" class="icon-btn" title="Cambiar tema">☀️</button>
+          <button id="settingsBtn" class="icon-btn" title="Configuración">⚙️</button>
+          <button id="logoutBtn" class="link-btn">Cerrar sesión</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+    <div class="app">
     <div class="impersonation-banner hidden" id="impersonationBanner">
       <span>🔎 Estás viendo la cuenta de <strong id="impersonationEmail"></strong> como admin.</span>
       <button type="button" id="stopImpersonateBtn" class="btn-secondary">← Volver a admin</button>
-    </div>
-    <div class="session-bar">
-      <span class="clock-pill" id="clockPill" title=""></span>
-      <label class="avatar-upload" id="avatarUpload" title="Cambiar foto de perfil">
-        <img id="avatarImg" src="" alt="" hidden>
-        <span id="avatarFallback">🧑</span>
-        <input type="file" id="avatarInput" accept="image/*" hidden>
-      </label>
-      <span id="sessionUser"></span>
-      <span class="streak-pill hidden" id="streakPill" title="Días seguidos usando la app"></span>
-      <span class="quota-pill" id="quotaPill" title="Videos disponibles hoy"></span>
-      <a href="/precios" class="icon-btn" title="Ver planes">💳</a>
-      <a id="adminLink" href="/admin" class="icon-btn hidden" title="Panel de admin">🛠️</a>
-      <button id="themeToggleBtn" class="icon-btn" title="Cambiar tema">☀️</button>
-      <button id="settingsBtn" class="icon-btn" title="Configuración">⚙️</button>
-      <button id="logoutBtn" class="link-btn">Cerrar sesión</button>
     </div>
     <header>
       <h1>🎬 Editor de Video de Dematiu Para Meta</h1>
       <p class="subtitle">Subí tu video, rotalo, cambiá el codec de audio y descargalo optimizado.</p>
     </header>
-
-    <nav class="section-tabs">
-      <button type="button" class="section-tab active" data-section="optimizerSection">🎯 Optimizador Meta</button>
-      <button type="button" class="section-tab" data-section="editorSection">✂️ Mini Editor</button>
-      <button type="button" class="section-tab" data-section="audioSection">🎧 Extraer Audio</button>
-      <button type="button" class="section-tab" data-section="historySection">📁 Historial</button>
-    </nav>
 
     <main>
       <div id="optimizerSection">
@@ -311,12 +328,22 @@
           <p class="empty-hint hidden" id="historyEmpty">Todavía no procesaste ningún video.</p>
         </section>
       </div>
+
+      <div id="updatesSection" class="hidden updates-page">
+        <p class="section-label" style="margin-top:0;">📣 Historial</p>
+        <h2 class="updates-title">Cambios anteriores</h2>
+        <p class="meta-hint" style="margin:0 0 20px;">Funciones, mejoras y correcciones, ordenadas desde la más reciente.</p>
+        <div id="updatesFeatured"></div>
+        <div id="updatesTimeline" class="updates-timeline"></div>
+      </div>
     </main>
 
     <footer class="fun-footer">
       Hecho con 🧉 por el equipo de Dematiu ·
       <a href="https://instagram.com/mate.tesei" target="_blank" rel="noopener">📸 @mate.tesei</a>
     </footer>
+    </div>
+    </div>
   </div>
 
   <!-- Panel de configuración: cuota diaria y cupón de carga ilimitada -->
@@ -401,5 +428,6 @@
   <script src="script.js"></script>
   <script src="editor.js"></script>
   <script src="audio.js"></script>
+  <script src="updates.js"></script>
 </body>
 </html>
