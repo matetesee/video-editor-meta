@@ -28,6 +28,20 @@ const logoutBtn = document.getElementById('logoutBtn');
 const avatarImg = document.getElementById('avatarImg');
 const avatarFallback = document.getElementById('avatarFallback');
 const avatarInput = document.getElementById('avatarInput');
+const quotaPill = document.getElementById('quotaPill');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+const settingsEmail = document.getElementById('settingsEmail');
+const settingsQuota = document.getElementById('settingsQuota');
+const couponBox = document.getElementById('couponBox');
+const couponInput = document.getElementById('couponInput');
+const couponApplyBtn = document.getElementById('couponApplyBtn');
+const couponError = document.getElementById('couponError');
+const celebrationOverlay = document.getElementById('celebrationOverlay');
+const celebrationCloseBtn = document.getElementById('celebrationCloseBtn');
+
+let currentEmail = '';
 
 function setAvatar(url) {
   if (url) {
@@ -40,17 +54,87 @@ function setAvatar(url) {
   }
 }
 
+function renderQuota(quota) {
+  if (!quota) {
+    quotaPill.textContent = '';
+    quotaPill.className = 'quota-pill hidden';
+    settingsQuota.textContent = '';
+    couponBox.classList.remove('hidden');
+    return;
+  }
+  if (quota.unlimited) {
+    quotaPill.textContent = '✨ Ilimitado';
+    quotaPill.className = 'quota-pill unlimited';
+    settingsQuota.textContent = '✨ Plan ilimitado (cupón activo)';
+    couponBox.classList.add('hidden'); // ya no hace falta poner otro cupón
+  } else {
+    quotaPill.textContent = `${quota.remaining}/${quota.limit} hoy`;
+    quotaPill.className = 'quota-pill' + (quota.remaining === 0 ? ' low' : '');
+    settingsQuota.textContent = `${quota.used} de ${quota.limit} videos usados hoy (se resetea a medianoche)`;
+    couponBox.classList.remove('hidden');
+  }
+}
+
 (async function initSession() {
   try {
     const res = await fetch('/api/me');
     if (res.status === 401) return window.location.href = '/login';
     const data = await res.json();
+    currentEmail = data.email;
     sessionUser.textContent = `👤 ${data.email}`;
+    settingsEmail.textContent = data.email;
     setAvatar(data.avatarUrl);
+    renderQuota(data.quota);
   } catch (err) {
     // si falla la consulta, no bloqueamos el uso de la pagina
   }
 })();
+
+settingsBtn.addEventListener('click', () => {
+  couponError.classList.add('hidden');
+  couponInput.value = '';
+  settingsOverlay.classList.remove('hidden');
+});
+settingsCloseBtn.addEventListener('click', () => settingsOverlay.classList.add('hidden'));
+settingsOverlay.addEventListener('click', (e) => {
+  if (e.target === settingsOverlay) settingsOverlay.classList.add('hidden');
+});
+
+couponApplyBtn.addEventListener('click', async () => {
+  const code = couponInput.value.trim();
+  if (!code) return;
+  couponApplyBtn.disabled = true;
+  couponApplyBtn.textContent = 'Aplicando...';
+  couponError.classList.add('hidden');
+  try {
+    const res = await fetch('/api/coupon', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Cupón inválido.');
+    renderQuota(data.quota);
+    settingsOverlay.classList.add('hidden');
+    showCelebration();
+  } catch (err) {
+    couponError.textContent = '❌ ' + err.message;
+    couponError.classList.remove('hidden');
+  } finally {
+    couponApplyBtn.disabled = false;
+    couponApplyBtn.textContent = 'Aplicar';
+  }
+});
+
+function showCelebration() {
+  celebrationOverlay.classList.remove('hidden');
+  if (window.fireConfetti) {
+    window.fireConfetti();
+    setTimeout(() => window.fireConfetti(), 350);
+    setTimeout(() => window.fireConfetti(), 700);
+  }
+}
+celebrationCloseBtn.addEventListener('click', () => celebrationOverlay.classList.add('hidden'));
 
 avatarInput.addEventListener('change', async () => {
   const file = avatarInput.files[0];

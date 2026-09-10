@@ -13,7 +13,17 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const ffprobePath = require('@ffprobe-installer/ffprobe').path;
 const { pool, initDb } = require('./db');
-const { createUser, findByEmail, findById, verifyPassword, linkOrCreateGoogleUser, setAvatar } = require('./users');
+const {
+  createUser,
+  findByEmail,
+  findById,
+  verifyPassword,
+  linkOrCreateGoogleUser,
+  setAvatar,
+  getQuotaStatus,
+  consumeQuota,
+  applyCoupon,
+} = require('./users');
 const { requireAuthPage, requireAuthApi } = require('./auth');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -133,9 +143,22 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/me', requireAuthApi, async (req, res) => {
   try {
     const user = await findById(req.session.user.id);
-    res.json({ email: req.session.user.email, avatarUrl: (user && user.avatar_data_url) || null });
+    const quota = await getQuotaStatus(req.session.user.id);
+    res.json({ email: req.session.user.email, avatarUrl: (user && user.avatar_data_url) || null, quota });
   } catch (err) {
-    res.json({ email: req.session.user.email, avatarUrl: null });
+    res.json({ email: req.session.user.email, avatarUrl: null, quota: null });
+  }
+});
+
+app.post('/api/coupon', requireAuthApi, async (req, res) => {
+  try {
+    const ok = await applyCoupon(req.session.user.id, req.body && req.body.code);
+    if (!ok) return res.status(400).json({ error: 'Cupón inválido.' });
+    const quota = await getQuotaStatus(req.session.user.id);
+    res.json({ ok: true, quota });
+  } catch (err) {
+    console.error('[coupon]', err.message);
+    res.status(500).json({ error: 'No se pudo aplicar el cupón. Probá de nuevo.' });
   }
 });
 
@@ -370,7 +393,27 @@ function buildBlurFitFilter(srcLabel, W, H, extraSuffix, uid) {
   );
 }
 
-app.post('/api/process', requireAuthApi, upload.single('video'), async (req, res) => {
+// Se corre ANTES de multer para no gastar ancho de banda/tiempo subiendo un
+// archivo si la persona ya se quedó sin cupo hoy. Consume 1 uso apenas se
+// acepta el envío (no cuando termina de procesar): asi "cargar un video"
+// cuenta como 1 uso tanto para el optimizador como para el mini editor.
+async function requireQuota(req, res, next) {
+  try {
+    const result = await consumeQuota(req.session.user.id);
+    if (!result.allowed) {
+      return res.status(429).json({
+        error: `Ya usaste tus ${result.limit} videos gratis de hoy. Se resetea a la medianoche, o activá el plan ilimitado con un cupón en ⚙️ Configuración.`,
+        quota: result,
+      });
+    }
+    next();
+  } catch (err) {
+    console.error('[quota]', err.message);
+    res.status(500).json({ error: 'No se pudo verificar tu cuota. Probá de nuevo.' });
+  }
+}
+
+app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
 
   const rotation = parseInt(req.body.rotation || '0', 10);
@@ -480,7 +523,7 @@ app.post('/api/process', requireAuthApi, upload.single('video'), async (req, res
 });
 
 // --- Mini editor: varios clips, recorte por clip, texto quemado opcional ---
-app.post('/api/edit', requireAuthApi, upload.array('clips', 20), async (req, res) => {
+app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: 'No se recibió ningún clip.' });
   }

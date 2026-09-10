@@ -24,6 +24,59 @@ async function setAvatar(userId, dataUrl) {
   await pool.query('UPDATE users SET avatar_data_url = $1 WHERE id = $2', [dataUrl, userId]);
 }
 
+const DAILY_LIMIT = 3;
+const COUPON_CODE = 'dematiu';
+// El dia "de hoy" se calcula en huso horario de Argentina (no UTC ni el del
+// servidor) para que el limite se resetee a la medianoche que el usuario
+// realmente ve en su reloj.
+const ARG_TZ = 'America/Argentina/Buenos_Aires';
+
+function todayInArgentina() {
+  // en-CA da formato YYYY-MM-DD, comodo para comparar como texto.
+  return new Date().toLocaleDateString('en-CA', { timeZone: ARG_TZ });
+}
+
+// Devuelve el estado de cuota SIN consumir nada (para mostrar en el
+// frontend). Si cambio el dia respecto a lo guardado, lo informa como si ya
+// estuviera reseteado (el reseteo real en la base se hace recien al
+// consumir, en consumeQuota, para no pisar concurrencia sin necesidad).
+async function getQuotaStatus(userId) {
+  const user = await findById(userId);
+  if (!user) return null;
+  if (user.unlimited) return { unlimited: true, used: 0, limit: DAILY_LIMIT, remaining: null };
+  const today = todayInArgentina();
+  const used = user.daily_reset_date === today ? user.daily_count : 0;
+  return { unlimited: false, used, limit: DAILY_LIMIT, remaining: Math.max(0, DAILY_LIMIT - used) };
+}
+
+// Intenta consumir 1 uso del limite diario. Devuelve {allowed, ...}. Si el
+// usuario tiene el cupon aplicado (unlimited), siempre permite.
+async function consumeQuota(userId) {
+  const user = await findById(userId);
+  if (!user) return { allowed: false, reason: 'Usuario no encontrado.' };
+  if (user.unlimited) return { allowed: true, unlimited: true };
+
+  const today = todayInArgentina();
+  const used = user.daily_reset_date === today ? user.daily_count : 0;
+
+  if (used >= DAILY_LIMIT) {
+    return { allowed: false, used, limit: DAILY_LIMIT, remaining: 0 };
+  }
+
+  const newUsed = used + 1;
+  await pool.query('UPDATE users SET daily_count = $1, daily_reset_date = $2 WHERE id = $3', [newUsed, today, userId]);
+  return { allowed: true, used: newUsed, limit: DAILY_LIMIT, remaining: DAILY_LIMIT - newUsed };
+}
+
+// Aplica el cupon de carga ilimitada. Devuelve true/false segun si el
+// codigo era correcto (no revela el codigo real en el mensaje de error).
+async function applyCoupon(userId, code) {
+  const normalized = String(code || '').trim().toLowerCase();
+  if (normalized !== COUPON_CODE) return false;
+  await pool.query('UPDATE users SET unlimited = true WHERE id = $1', [userId]);
+  return true;
+}
+
 async function createUser(email, password, displayName) {
   const passwordHash = bcrypt.hashSync(String(password), 10);
   const { rows } = await pool.query(
@@ -73,4 +126,8 @@ module.exports = {
   verifyPassword,
   linkOrCreateGoogleUser,
   setAvatar,
+  getQuotaStatus,
+  consumeQuota,
+  applyCoupon,
+  DAILY_LIMIT,
 };

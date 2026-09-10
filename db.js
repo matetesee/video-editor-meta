@@ -21,6 +21,13 @@ async function initDb() {
   // ALTER ... IF NOT EXISTS en vez de meterla en el CREATE TABLE de arriba:
   // asi las cuentas que ya existian antes de esta columna no rompen nada.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data_url TEXT;`);
+
+  // Limite diario de videos: "unlimited" lo desbloquea el cupon; daily_count
+  // y daily_reset_date llevan la cuenta de cuantos usó hoy (dia calendario
+  // de Argentina, ver ARG_TZ en server.js) para poder resetear a medianoche.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS unlimited BOOLEAN NOT NULL DEFAULT false;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_count INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_reset_date TEXT NOT NULL DEFAULT '';`);
 }
 
 module.exports = { pool, initDb };

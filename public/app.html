@@ -15,6 +15,8 @@
         <input type="file" id="avatarInput" accept="image/*" hidden>
       </label>
       <span id="sessionUser"></span>
+      <span class="quota-pill" id="quotaPill" title="Videos disponibles hoy"></span>
+      <button id="settingsBtn" class="icon-btn" title="Configuración">⚙️</button>
       <button id="logoutBtn" class="link-btn">Cerrar sesión</button>
     </div>
     <header>
@@ -42,11 +44,7 @@
         </div>
         <div class="file-info" id="fileInfo"></div>
 
-        <div class="control-group title-group">
-          <label for="videoTitle">✏️ Título del video</label>
-          <input type="text" id="videoTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
-        </div>
-
+        <p class="section-label">1. Formato de destino</p>
         <div class="panel meta-panel">
           <label for="metaPreset">📱 Formato para Meta Ads</label>
           <select id="metaPreset">
@@ -58,6 +56,7 @@
           <p class="meta-hint" id="metaHint">Se ajusta automáticamente a la resolución, códec y bitrate que pide Meta para que no lo rechace ni lo marque como "no se entregará en esta ubicación". El contenido se centra sobre un fondo relleno, sin recortarlo.</p>
         </div>
 
+        <p class="section-label">2. Ajustes</p>
         <div class="controls">
           <div class="control-group">
             <label>Rotación</label>
@@ -94,6 +93,12 @@
           </div>
         </div>
 
+        <p class="section-label">3. Nombre del archivo</p>
+        <div class="control-group title-group">
+          <label for="videoTitle">✏️ Título del video</label>
+          <input type="text" id="videoTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
+        </div>
+
         <div class="actions">
           <button id="processBtn" class="btn-primary">⚙️ Procesar video</button>
           <button id="resetBtn" class="btn-secondary">Elegir otro video</button>
@@ -127,10 +132,12 @@
         </section>
 
         <section class="panel hidden" id="editorEditPanel">
+          <p class="section-label">1. Clips y recorte</p>
           <div id="clipsList"></div>
 
+          <p class="section-label">2. Formato de salida</p>
           <div class="panel meta-panel">
-            <label for="editorPreset">📱 Formato de salida</label>
+            <label for="editorPreset">📱 Formato</label>
             <select id="editorPreset">
               <option value="reels" selected>Reels / Stories (9:16 vertical)</option>
               <option value="square">Feed cuadrado (1:1)</option>
@@ -138,6 +145,7 @@
             </select>
           </div>
 
+          <p class="section-label">3. Texto sobre el video (opcional)</p>
           <div class="panel meta-panel">
             <label class="overlay-toggle-label">
               <input type="checkbox" id="overlayEnabled"> 📝 Agregar texto quemado sobre el video
@@ -155,11 +163,7 @@
             </div>
           </div>
 
-          <div class="control-group title-group">
-            <label for="editorTitle">✏️ Título del video</label>
-            <input type="text" id="editorTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
-          </div>
-
+          <p class="section-label">4. Calidad</p>
           <div class="controls">
             <div class="control-group">
               <label for="editorQuality">Calidad / tamaño</label>
@@ -169,6 +173,12 @@
                 <option value="small">Archivo liviano</option>
               </select>
             </div>
+          </div>
+
+          <p class="section-label">5. Nombre del archivo</p>
+          <div class="control-group title-group">
+            <label for="editorTitle">✏️ Título del video</label>
+            <input type="text" id="editorTitle" placeholder="Nombre con el que se va a descargar" maxlength="150">
           </div>
 
           <div class="actions">
@@ -200,6 +210,45 @@
       Hecho con 🧉 por el equipo de Dematiu ·
       <a href="https://instagram.com/mate.tesei" target="_blank" rel="noopener">📸 @mate.tesei</a>
     </footer>
+  </div>
+
+  <!-- Panel de configuración: cuota diaria y cupón de carga ilimitada -->
+  <div class="modal-overlay hidden" id="settingsOverlay">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>⚙️ Configuración</h2>
+        <button type="button" class="modal-close" id="settingsCloseBtn">✕</button>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-label">Cuenta</span>
+        <span id="settingsEmail" class="settings-value"></span>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-label">Plan</span>
+        <span id="settingsQuota" class="settings-value"></span>
+      </div>
+
+      <div class="coupon-box" id="couponBox">
+        <label for="couponInput">🎟️ ¿Tenés un cupón?</label>
+        <div class="coupon-row">
+          <input type="text" id="couponInput" placeholder="Ingresá el código">
+          <button type="button" id="couponApplyBtn" class="btn-primary">Aplicar</button>
+        </div>
+        <p class="error hidden" id="couponError"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pantalla completa de festejo al activar el cupón -->
+  <div class="celebration-overlay hidden" id="celebrationOverlay">
+    <div class="celebration-box">
+      <div class="celebration-emoji">🎉</div>
+      <h2>¡Felicitaciones!</h2>
+      <p>Activaste el plan ilimitado en esta cuenta. A partir de ahora podés cargar todos los videos que quieras, sin límite diario.</p>
+      <button type="button" id="celebrationCloseBtn" class="btn-primary">¡Genial!</button>
+    </div>
   </div>
 
   <script src="script.js"></script>
