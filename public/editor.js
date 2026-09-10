@@ -207,6 +207,7 @@ editorExportBtn.addEventListener('click', async () => {
     }
   }
 
+  if (window.requestNotifyPermission) window.requestNotifyPermission();
   editorExportBtn.disabled = true;
   editorExportBtn.textContent = 'Subiendo...';
   editorErrorPanel.classList.add('hidden');
@@ -214,6 +215,7 @@ editorExportBtn.addEventListener('click', async () => {
   editorProgressWrap.classList.remove('hidden');
   editorProgressFill.classList.add('indeterminate');
   editorProgressText.textContent = 'Subiendo clips...';
+  delete editorProgressText.dataset.rotating;
   startEditorElapsedTimer();
 
   const formData = new FormData();
@@ -264,13 +266,21 @@ function pollEditorStatus(jobId) {
       const data = await res.json();
 
       if (data.status === 'analyzing') {
-        editorProgressText.textContent = 'Analizando clips...';
+        if (window.startPhraseRotation && !editorProgressText.dataset.rotating) {
+          editorProgressText.dataset.rotating = '1';
+          window.startPhraseRotation(editorProgressText);
+        }
       } else if (data.status === 'processing') {
         editorProgressFill.classList.remove('indeterminate');
         editorProgressFill.style.width = data.progress + '%';
-        editorProgressText.textContent = `Procesando... ${data.progress}%`;
+        if (!editorProgressText.dataset.rotating) {
+          editorProgressText.dataset.rotating = '1';
+          if (window.startPhraseRotation) window.startPhraseRotation(editorProgressText);
+        }
       } else if (data.status === 'done') {
         stopEditorTimers();
+        if (window.stopPhraseRotation) window.stopPhraseRotation();
+        delete editorProgressText.dataset.rotating;
         editorProgressFill.classList.remove('indeterminate');
         editorProgressFill.style.width = '100%';
         editorDownloadLink.href = `/api/download/${jobId}`;
@@ -280,11 +290,16 @@ function pollEditorStatus(jobId) {
         editorExportBtn.disabled = false;
         editorExportBtn.textContent = '🎬 Exportar video';
         if (window.fireConfetti) window.fireConfetti();
+        if (window.notifyVideoReady) window.notifyVideoReady('Tu video del Mini Editor ya está listo para descargar.');
       } else if (data.status === 'cancelled') {
         stopEditorTimers();
+        if (window.stopPhraseRotation) window.stopPhraseRotation();
+        delete editorProgressText.dataset.rotating;
         showEditorError(data.error || 'Proceso cancelado.');
       } else if (data.status === 'error') {
         stopEditorTimers();
+        if (window.stopPhraseRotation) window.stopPhraseRotation();
+        delete editorProgressText.dataset.rotating;
         showEditorError(data.error || 'Ocurrió un error al exportar el video.');
       }
     } catch (err) {

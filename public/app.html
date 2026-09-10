@@ -9,6 +9,10 @@
 </head>
 <body>
   <div class="app">
+    <div class="impersonation-banner hidden" id="impersonationBanner">
+      <span>🔎 Estás viendo la cuenta de <strong id="impersonationEmail"></strong> como admin.</span>
+      <button type="button" id="stopImpersonateBtn" class="btn-secondary">← Volver a admin</button>
+    </div>
     <div class="session-bar">
       <label class="avatar-upload" id="avatarUpload" title="Cambiar foto de perfil">
         <img id="avatarImg" src="" alt="" hidden>
@@ -16,6 +20,7 @@
         <input type="file" id="avatarInput" accept="image/*" hidden>
       </label>
       <span id="sessionUser"></span>
+      <span class="streak-pill hidden" id="streakPill" title="Días seguidos usando la app"></span>
       <span class="quota-pill" id="quotaPill" title="Videos disponibles hoy"></span>
       <a id="adminLink" href="/admin" class="icon-btn hidden" title="Panel de admin">🛠️</a>
       <button id="themeToggleBtn" class="icon-btn" title="Cambiar tema">☀️</button>
@@ -260,6 +265,12 @@
         </div>
         <p class="meta-hint" id="referralCount" style="margin:10px 0 0;"></p>
       </div>
+
+      <div class="coupon-box">
+        <label>🏅 Tus insignias</label>
+        <p class="meta-hint" style="margin:0 0 10px;" id="badgesSummary"></p>
+        <div class="badges-grid" id="badgesGrid"></div>
+      </div>
     </div>
   </div>
 
@@ -273,6 +284,7 @@
     </div>
   </div>
 
+  <script src="fun.js"></script>
   <script src="script.js"></script>
   <script src="editor.js"></script>
 </body>

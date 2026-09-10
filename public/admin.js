@@ -48,9 +48,29 @@ async function loadUsers() {
         <td>${u.bonus_uses}</td>
         <td><code>${u.referral_code || '—'}</code></td>
         <td>${u.referrals_made}</td>
+        <td><button type="button" class="btn-secondary impersonate-btn" data-id="${u.id}" data-email="${u.email}">🔎 Entrar</button></td>
       </tr>`
     )
     .join('');
+
+  usersBody.querySelectorAll('.impersonate-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const email = btn.dataset.email;
+      if (!confirm(`¿Entrar a la cuenta de ${email}? Vas a ver la app como esa persona la ve. Podés volver con un botón desde ahí.`)) return;
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+      try {
+        const r = await fetch(`/api/admin/impersonate/${btn.dataset.id}`, { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo entrar a esa cuenta.');
+        window.location.href = '/';
+      } catch (err) {
+        alert('❌ ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🔎 Entrar';
+      }
+    });
+  });
 }
 
 async function loadCoupons() {

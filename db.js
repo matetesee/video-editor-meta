@@ -68,6 +68,14 @@ async function initDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;`);
 
+  // Gamificacion: total_videos cuenta todos los videos procesados alguna vez
+  // (no se resetea nunca, a diferencia de daily_count); streak_count/
+  // last_active_date llevan la racha de dias consecutivos usando la app
+  // (ver recordVideoCompletion en users.js).
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_videos INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_count INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date TEXT NOT NULL DEFAULT '';`);
+
   // Referidos: cada cuenta tiene su propio codigo para invitar, y guarda
   // quien la invito a ella (si vino de un link de invitacion).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;`);

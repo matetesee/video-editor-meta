@@ -27,6 +27,8 @@ const {
   findByValidResetToken,
   resetPassword,
   countReferrals,
+  recordVideoCompletion,
+  getBadges,
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
@@ -158,6 +160,7 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
     const user = await findById(req.session.user.id);
     const quota = await getQuotaStatus(req.session.user.id);
     const referrals = await countReferrals(req.session.user.id);
+    const badges = await getBadges(req.session.user.id);
     res.json({
       email: req.session.user.email,
       avatarUrl: (user && user.avatar_data_url) || null,
@@ -165,10 +168,46 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
       referralCode: user && user.referral_code,
       referrals,
       isAdmin: isAdminEmail(req.session.user.email),
+      streak: (user && user.streak_count) || 0,
+      totalVideos: (user && user.total_videos) || 0,
+      badges,
+      impersonating: !!(req.session.impersonator),
+      impersonatorEmail: req.session.impersonator ? req.session.impersonator.email : null,
     });
   } catch (err) {
     res.json({ email: req.session.user.email, avatarUrl: null, quota: null });
   }
+});
+
+// ---- Soporte: el admin puede "entrar" a la cuenta de un usuario para ver
+// exactamente lo que esa persona ve, sin pedirle la contraseña. Guarda quien
+// era el admin original en session.impersonator para poder volver despues.
+app.post('/api/admin/impersonate/:userId', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    if (req.session.impersonator) {
+      return res.status(400).json({ error: 'Ya estás viendo la cuenta de otra persona. Volvé a admin primero.' });
+    }
+    const targetId = parseInt(req.params.userId, 10);
+    if (targetId === req.session.user.id) {
+      return res.status(400).json({ error: 'Esa es tu propia cuenta.' });
+    }
+    const target = await findById(targetId);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+    req.session.impersonator = { id: req.session.user.id, email: req.session.user.email };
+    req.session.user = { id: target.id, email: target.email };
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/impersonate]', err.message);
+    res.status(500).json({ error: 'No se pudo entrar a esa cuenta.' });
+  }
+});
+
+app.post('/api/admin/stop-impersonate', requireAuthApi, (req, res) => {
+  if (!req.session.impersonator) return res.status(400).json({ error: 'No estás viendo la cuenta de otra persona.' });
+  req.session.user = req.session.impersonator;
+  req.session.impersonator = null;
+  res.json({ ok: true });
 });
 
 app.post('/api/coupon', requireAuthApi, async (req, res) => {
@@ -397,6 +436,7 @@ function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
           outputSize,
           filePath: outputPath,
         }).catch((err) => console.error(`[history:${jobId}]`, err.message));
+        recordVideoCompletion(userId).catch((err) => console.error(`[streak:${jobId}]`, err.message));
       }
     })
     .save(outputPath);

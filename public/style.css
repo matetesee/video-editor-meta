@@ -867,3 +867,66 @@ select {
   border-radius: 4px;
   font-size: 0.8rem;
 }
+
+/* ---- Racha de uso ---- */
+.streak-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(255, 149, 0, 0.12);
+  color: #ff9500;
+  border: 1px solid rgba(255, 149, 0, 0.3);
+  white-space: nowrap;
+}
+
+/* ---- Insignias (panel de configuración) ---- */
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  text-align: center;
+  opacity: 0.4;
+  filter: grayscale(1);
+  transition: opacity 0.15s, filter 0.15s;
+}
+.badge.unlocked {
+  opacity: 1;
+  filter: none;
+  border-color: rgba(108, 92, 231, 0.35);
+  background: rgba(108, 92, 231, 0.08);
+}
+.badge-icon { font-size: 1.4rem; }
+.badge-label {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  line-height: 1.2;
+}
+.badge.unlocked .badge-label { color: var(--text); }
+
+/* ---- Banner de "estás viendo la cuenta de otra persona" (admin) ---- */
+.impersonation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 149, 0, 0.15);
+  border: 1px solid rgba(255, 149, 0, 0.4);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+.impersonation-banner strong { color: #ff9500; }

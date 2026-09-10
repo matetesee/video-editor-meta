@@ -47,6 +47,12 @@ const referralCopyBtn = document.getElementById('referralCopyBtn');
 const referralCount = document.getElementById('referralCount');
 const historyList = document.getElementById('historyList');
 const historyEmpty = document.getElementById('historyEmpty');
+const streakPill = document.getElementById('streakPill');
+const badgesGrid = document.getElementById('badgesGrid');
+const badgesSummary = document.getElementById('badgesSummary');
+const impersonationBanner = document.getElementById('impersonationBanner');
+const impersonationEmail = document.getElementById('impersonationEmail');
+const stopImpersonateBtn = document.getElementById('stopImpersonateBtn');
 
 let currentEmail = '';
 
@@ -81,6 +87,33 @@ function renderQuota(quota) {
   }
 }
 
+function renderStreak(streak) {
+  if (!streakPill) return;
+  if (streak && streak > 0) {
+    streakPill.textContent = `🔥 ${streak}`;
+    streakPill.title = `Racha de ${streak} día(s) seguido(s) usando la app`;
+    streakPill.classList.remove('hidden');
+  } else {
+    streakPill.classList.add('hidden');
+  }
+}
+
+function renderBadges(badges) {
+  if (!badgesGrid) return;
+  const list = badges || [];
+  const unlockedCount = list.filter((b) => b.unlocked).length;
+  if (badgesSummary) badgesSummary.textContent = `Desbloqueaste ${unlockedCount} de ${list.length}.`;
+  badgesGrid.innerHTML = list
+    .map(
+      (b) => `
+      <div class="badge${b.unlocked ? ' unlocked' : ''}" title="${b.label}${b.unlocked ? '' : ' (todavía no)'}">
+        <span class="badge-icon">${b.icon}</span>
+        <span class="badge-label">${b.label}</span>
+      </div>`
+    )
+    .join('');
+}
+
 (async function initSession() {
   try {
     const res = await fetch('/api/me');
@@ -91,13 +124,34 @@ function renderQuota(quota) {
     settingsEmail.textContent = data.email;
     setAvatar(data.avatarUrl);
     renderQuota(data.quota);
+    renderStreak(data.streak);
+    renderBadges(data.badges);
     if (referralCodeDisplay) referralCodeDisplay.value = data.referralCode || '';
     if (referralCount) referralCount.textContent = `Ya invitaste a ${data.referrals || 0} persona(s).`;
     if (data.isAdmin && adminLink) adminLink.classList.remove('hidden');
+    if (data.impersonating && impersonationBanner) {
+      impersonationEmail.textContent = data.email;
+      impersonationBanner.classList.remove('hidden');
+    }
   } catch (err) {
     // si falla la consulta, no bloqueamos el uso de la pagina
   }
 })();
+
+if (stopImpersonateBtn) {
+  stopImpersonateBtn.addEventListener('click', async () => {
+    stopImpersonateBtn.disabled = true;
+    try {
+      const res = await fetch('/api/admin/stop-impersonate', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo volver a admin.');
+      window.location.href = '/admin';
+    } catch (err) {
+      alert('❌ ' + err.message);
+      stopImpersonateBtn.disabled = false;
+    }
+  });
+}
 
 if (referralCopyBtn) {
   referralCopyBtn.addEventListener('click', async () => {
@@ -326,6 +380,7 @@ resetBtn.addEventListener('click', resetAll);
 
 processBtn.addEventListener('click', async () => {
   if (!currentFile) return;
+  if (window.requestNotifyPermission) window.requestNotifyPermission();
   processBtn.disabled = true;
   processBtn.textContent = 'Subiendo...';
   errorPanel.classList.add('hidden');
@@ -333,6 +388,7 @@ processBtn.addEventListener('click', async () => {
   progressWrap.classList.remove('hidden');
   progressFill.classList.add('indeterminate');
   progressText.textContent = 'Subiendo video...';
+  delete progressText.dataset.rotating;
   startElapsedTimer();
 
   const formData = new FormData();
@@ -387,13 +443,21 @@ function pollStatus(jobId) {
       const data = await res.json();
 
       if (data.status === 'analyzing') {
-        progressText.textContent = 'Analizando video...';
+        if (window.startPhraseRotation && !progressText.dataset.rotating) {
+          progressText.dataset.rotating = '1';
+          window.startPhraseRotation(progressText);
+        }
       } else if (data.status === 'processing') {
         progressFill.classList.remove('indeterminate');
         progressFill.style.width = data.progress + '%';
-        progressText.textContent = `Procesando... ${data.progress}%`;
+        if (!progressText.dataset.rotating) {
+          progressText.dataset.rotating = '1';
+          if (window.startPhraseRotation) window.startPhraseRotation(progressText);
+        }
       } else if (data.status === 'done') {
         stopTimers();
+        if (window.stopPhraseRotation) window.stopPhraseRotation();
+        delete progressText.dataset.rotating;
         progressFill.classList.remove('indeterminate');
         progressFill.style.width = '100%';
         downloadLink.href = `/api/download/${jobId}`;
@@ -408,11 +472,16 @@ function pollStatus(jobId) {
         processBtn.disabled = false;
         processBtn.textContent = '⚙️ Procesar video';
         if (window.fireConfetti) window.fireConfetti();
+        if (window.notifyVideoReady) window.notifyVideoReady('Tu video optimizado ya está listo para descargar.');
       } else if (data.status === 'cancelled') {
         stopTimers();
+        if (window.stopPhraseRotation) window.stopPhraseRotation();
+        delete progressText.dataset.rotating;
         showError(data.error || 'Proceso cancelado.');
       } else if (data.status === 'error') {
         stopTimers();
+        if (window.stopPhraseRotation) window.stopPhraseRotation();
+        delete progressText.dataset.rotating;
         showError(data.error || 'Ocurrió un error al procesar el video.');
       }
     } catch (err) {

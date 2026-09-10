@@ -250,6 +250,49 @@ async function countReferrals(userId) {
   return rows[0].n;
 }
 
+// ---- Gamificacion: racha de uso + insignias ----
+
+// Se llama cada vez que un job termina bien (ver el 'end' de runJob en
+// server.js). Suma 1 al contador total (para las insignias de cantidad) y
+// actualiza la racha de dias consecutivos: si hoy ya estaba contado no
+// vuelve a subir la racha, si el ultimo dia activo fue ayer la extiende, y
+// si hubo un salto de mas de un dia la reinicia en 1.
+async function recordVideoCompletion(userId) {
+  const user = await findById(userId);
+  if (!user) return;
+  const today = todayInArgentina();
+  if (user.last_active_date === today) {
+    await pool.query('UPDATE users SET total_videos = total_videos + 1 WHERE id = $1', [userId]);
+    return;
+  }
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: ARG_TZ });
+  const newStreak = user.last_active_date === yesterday ? user.streak_count + 1 : 1;
+  await pool.query(
+    'UPDATE users SET total_videos = total_videos + 1, streak_count = $1, last_active_date = $2 WHERE id = $3',
+    [newStreak, today, userId]
+  );
+}
+
+// Insignias calculadas al vuelo a partir de datos que ya tenemos (no hace
+// falta una tabla aparte: no se "otorgan" una vez y quedan, se recalculan
+// segun el estado actual de la cuenta cada vez que se piden).
+async function getBadges(userId) {
+  const user = await findById(userId);
+  if (!user) return [];
+  const referrals = await countReferrals(userId);
+  const unlimited = isUnlimitedNow(user);
+  return [
+    { id: 'first_video', icon: '🎬', label: 'Primer video', unlocked: user.total_videos >= 1 },
+    { id: 'ten_videos', icon: '📼', label: '10 videos procesados', unlocked: user.total_videos >= 10 },
+    { id: 'fifty_videos', icon: '🚀', label: '50 videos procesados', unlocked: user.total_videos >= 50 },
+    { id: 'streak_3', icon: '🔥', label: 'Racha de 3 días', unlocked: user.streak_count >= 3 },
+    { id: 'streak_7', icon: '🔥', label: 'Racha de 7 días', unlocked: user.streak_count >= 7 },
+    { id: 'first_referral', icon: '🤝', label: 'Primer referido', unlocked: referrals >= 1 },
+    { id: 'five_referrals', icon: '🌟', label: '5 referidos', unlocked: referrals >= 5 },
+    { id: 'unlimited', icon: '✨', label: 'Cuenta ilimitada', unlocked: unlimited },
+  ];
+}
+
 // ---- Historial de videos ----
 const HISTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
@@ -341,6 +384,8 @@ module.exports = {
   findByValidResetToken,
   resetPassword,
   countReferrals,
+  recordVideoCompletion,
+  getBadges,
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
