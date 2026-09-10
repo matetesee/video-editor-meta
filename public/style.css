@@ -207,6 +207,28 @@ body {
   justify-content: center;
 }
 
+.link-btn-inline {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  cursor: pointer;
+  margin-top: 14px;
+  text-decoration: underline;
+}
+.link-btn-inline:hover { color: var(--accent-hover); }
+
+.success-msg {
+  color: var(--success);
+  font-size: 0.85rem;
+  text-align: center;
+  margin-top: 14px;
+  line-height: 1.4;
+}
+
 .login-tabs {
   display: flex;
   gap: 6px;

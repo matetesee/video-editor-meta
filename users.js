@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { pool } = require('./db');
 
 function normalizeEmail(email) {
@@ -77,6 +78,39 @@ async function applyCoupon(userId, code) {
   return true;
 }
 
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
+
+// Genera un token de recuperacion para el email dado. Devuelve {user, token}
+// o null si no existe ninguna cuenta con ese email (el endpoint HTTP igual
+// responde "ok" en ambos casos, para no revelar que emails existen).
+async function createResetToken(email) {
+  const user = await findByEmail(email);
+  if (!user) return null;
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+  await pool.query('UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3', [token, expires, user.id]);
+  return { user, token };
+}
+
+// Busca un usuario por token de recuperacion, solo si todavia no vencio.
+async function findByValidResetToken(token) {
+  if (!token) return null;
+  const { rows } = await pool.query(
+    'SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires > now()',
+    [token]
+  );
+  return rows[0] || null;
+}
+
+// Cambia la contraseña y invalida el token (de un solo uso).
+async function resetPassword(userId, newPassword) {
+  const passwordHash = bcrypt.hashSync(String(newPassword), 10);
+  await pool.query(
+    'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+    [passwordHash, userId]
+  );
+}
+
 async function createUser(email, password, displayName) {
   const passwordHash = bcrypt.hashSync(String(password), 10);
   const { rows } = await pool.query(
@@ -130,4 +164,7 @@ module.exports = {
   consumeQuota,
   applyCoupon,
   DAILY_LIMIT,
+  createResetToken,
+  findByValidResetToken,
+  resetPassword,
 };

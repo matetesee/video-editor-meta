@@ -1,12 +1,18 @@
 const loginTabs = document.querySelectorAll('.login-tab');
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
+const forgotForm = document.getElementById('forgotForm');
 const loginSub = document.getElementById('loginSub');
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
+const forgotBtn = document.getElementById('forgotBtn');
+const forgotLink = document.getElementById('forgotLink');
+const backToLoginLink = document.getElementById('backToLoginLink');
+const forgotSuccess = document.getElementById('forgotSuccess');
 const loginError = document.getElementById('loginError');
 const googleBtn = document.getElementById('googleBtn');
 const googleDivider = document.getElementById('googleDivider');
+let googleEnabled = false;
 
 function showError(msg) {
   loginError.textContent = '❌ ' + msg;
@@ -15,10 +21,16 @@ function showError(msg) {
 
 function setTab(tab) {
   loginTabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+  loginTabs.forEach((t) => t.parentElement.classList.remove('hidden'));
   loginForm.classList.toggle('hidden', tab !== 'login');
   registerForm.classList.toggle('hidden', tab !== 'register');
+  forgotForm.classList.add('hidden');
   loginSub.textContent = tab === 'login' ? 'Ingresá con tu cuenta' : 'Creá tu cuenta para empezar';
   loginError.classList.add('hidden');
+  if (googleEnabled) {
+    googleBtn.classList.remove('hidden');
+    googleDivider.classList.remove('hidden');
+  }
 }
 
 loginTabs.forEach((btn) => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
@@ -28,12 +40,27 @@ loginTabs.forEach((btn) => btn.addEventListener('click', () => setTab(btn.datase
 fetch('/api/auth-config')
   .then((r) => r.json())
   .then((data) => {
-    if (data.googleEnabled) {
+    googleEnabled = !!data.googleEnabled;
+    if (googleEnabled) {
       googleBtn.classList.remove('hidden');
       googleDivider.classList.remove('hidden');
     }
   })
   .catch(() => {});
+
+forgotLink.addEventListener('click', () => {
+  loginTabs.forEach((t) => t.parentElement.classList.add('hidden'));
+  loginForm.classList.add('hidden');
+  registerForm.classList.add('hidden');
+  forgotForm.classList.remove('hidden');
+  googleBtn.classList.add('hidden');
+  googleDivider.classList.add('hidden');
+  loginSub.textContent = 'Recuperar contraseña';
+  loginError.classList.add('hidden');
+  forgotSuccess.classList.add('hidden');
+});
+
+backToLoginLink.addEventListener('click', () => setTab('login'));
 
 googleBtn.addEventListener('click', () => {
   window.location.href = '/auth/google';
@@ -93,5 +120,33 @@ registerForm.addEventListener('submit', async (e) => {
     showError(err.message);
     registerBtn.disabled = false;
     registerBtn.textContent = 'Crear cuenta';
+  }
+});
+
+forgotForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  forgotSuccess.classList.add('hidden');
+  const email = document.getElementById('forgotEmail').value.trim();
+
+  forgotBtn.disabled = true;
+  forgotBtn.textContent = 'Enviando...';
+
+  try {
+    await fetch('/api/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    // Siempre mostramos el mismo mensaje, exista o no la cuenta: asi no se
+    // puede usar este formulario para adivinar que emails estan registrados.
+    forgotSuccess.textContent = '✅ Si ese email está registrado, te mandamos un link para recuperar tu contraseña.';
+    forgotSuccess.classList.remove('hidden');
+    forgotBtn.textContent = 'Enviar link';
+  } catch (err) {
+    forgotSuccess.textContent = '✅ Si ese email está registrado, te mandamos un link para recuperar tu contraseña.';
+    forgotSuccess.classList.remove('hidden');
+    forgotBtn.textContent = 'Enviar link';
+  } finally {
+    forgotBtn.disabled = false;
   }
 });

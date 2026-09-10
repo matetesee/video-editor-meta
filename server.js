@@ -23,8 +23,12 @@ const {
   getQuotaStatus,
   consumeQuota,
   applyCoupon,
+  createResetToken,
+  findByValidResetToken,
+  resetPassword,
 } = require('./users');
 const { requireAuthPage, requireAuthApi } = require('./auth');
+const { sendResetPasswordEmail } = require('./mailer');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
@@ -202,6 +206,42 @@ if (GOOGLE_ENABLED) {
 app.get('/login', (req, res) => {
   if (req.session && req.session.user) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/api/forgot-password', async (req, res) => {
+  // Siempre responde "ok", exista o no la cuenta: asi nadie puede usar este
+  // endpoint para averiguar que emails estan registrados.
+  try {
+    const result = await createResetToken(req.body && req.body.email);
+    if (result) {
+      const resetUrl = `${PUBLIC_URL}/reset-password?token=${result.token}`;
+      await sendResetPasswordEmail(result.user.email, resetUrl);
+    }
+  } catch (err) {
+    console.error('[forgot-password]', err.message);
+  }
+  res.json({ ok: true });
+});
+
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  const { token, password } = req.body || {};
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'La contraseña tiene que tener al menos 8 caracteres.' });
+  }
+  try {
+    const user = await findByValidResetToken(token);
+    if (!user) return res.status(400).json({ error: 'El link venció o ya se usó. Pedí uno nuevo.' });
+    await resetPassword(user.id, password);
+    req.session.user = { id: user.id, email: user.email }; // ya queda logueado
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[reset-password]', err.message);
+    res.status(500).json({ error: 'No se pudo cambiar la contraseña. Probá de nuevo.' });
+  }
 });
 
 app.get('/', requireAuthPage, (req, res) => {

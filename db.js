@@ -28,6 +28,10 @@ async function initDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS unlimited BOOLEAN NOT NULL DEFAULT false;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_count INTEGER NOT NULL DEFAULT 0;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_reset_date TEXT NOT NULL DEFAULT '';`);
+
+  // Recuperar contraseña: token temporal + su vencimiento.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ;`);
 }
 
 module.exports = { pool, initDb };

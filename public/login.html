@@ -38,6 +38,18 @@
           <input type="password" id="loginPassword" autocomplete="current-password" required>
         </div>
         <button type="submit" class="btn-primary login-submit" id="loginBtn">Ingresar</button>
+        <button type="button" class="link-btn-inline" id="forgotLink">¿Olvidaste tu contraseña?</button>
+      </form>
+
+      <form id="forgotForm" class="hidden">
+        <p class="login-sub" style="margin-bottom:16px;">Ingresá tu email y te mandamos un link para elegir una nueva contraseña.</p>
+        <div class="control-group">
+          <label for="forgotEmail">Email</label>
+          <input type="email" id="forgotEmail" autocomplete="username" required>
+        </div>
+        <button type="submit" class="btn-primary login-submit" id="forgotBtn">Enviar link</button>
+        <button type="button" class="link-btn-inline" id="backToLoginLink">← Volver a iniciar sesión</button>
+        <p class="success-msg hidden" id="forgotSuccess"></p>
       </form>
 
       <form id="registerForm" class="hidden">
