@@ -353,7 +353,10 @@ async function linkOrCreateGoogleUser({ googleId, email, displayName }) {
     'INSERT INTO users (email, google_id, display_name, referral_code) VALUES ($1, $2, $3, $4) RETURNING *',
     [fallbackEmail, googleId, displayName || null, generateReferralCode()]
   );
-  return rows[0];
+  // isNew: para que el callback de /auth/google en server.js sepa si mandar
+  // a esta cuenta recien creada al selector de planes (igual que el
+  // registro manual), en vez de derivarla siempre a "/".
+  return { ...rows[0], isNew: true };
 }
 
 // Cuantas cuentas trajo este usuario con su codigo de referido.

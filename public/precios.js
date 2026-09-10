@@ -4,8 +4,16 @@
 
 const pricingGrid = document.getElementById('pricingGrid');
 const pricingMessage = document.getElementById('pricingMessage');
+const pricingSubtitle = document.getElementById('pricingSubtitle');
 
 let session = null; // null = no logueado
+
+// Si viene recien de crear su cuenta (registro o Google), lo mandamos
+// primero acá a elegir plan; el mensaje se lo aclara para que no piense que
+// se perdió algo.
+if (new URLSearchParams(window.location.search).get('bienvenida') === '1' && pricingSubtitle) {
+  pricingSubtitle.textContent = '🎉 ¡Bienvenido! Tu cuenta ya está activa en el plan Gratis. Elegí si querés más cupo o seguí gratis por ahora.';
+}
 
 function fmtPrice(usd) {
   if (usd === 0) return '$0';
@@ -20,6 +28,10 @@ function planCardHtml(plan, session) {
   let buttonHtml;
   if (!session) {
     buttonHtml = `<a href="/login" class="btn-primary pricing-cta">${plan.cta}</a>`;
+  } else if (isCurrent && plan.key === 'free') {
+    // El plan Gratis ya esta activo por default: no tiene sentido un boton
+    // deshabilitado aca, lo mandamos directo a usar la app.
+    buttonHtml = `<a href="/" class="btn-primary pricing-cta">Ir a la app →</a>`;
   } else if (isCurrent) {
     buttonHtml = `<button type="button" class="btn-secondary pricing-cta" disabled>Tu plan actual</button>`;
   } else if (isPending) {

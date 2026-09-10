@@ -316,7 +316,9 @@ if (GOOGLE_ENABLED) {
     passport.authenticate('google', { session: false, failureRedirect: '/login' }),
     (req, res) => {
       req.session.user = { id: req.user.id, email: req.user.email };
-      res.redirect('/');
+      // Cuenta nueva (primer login con Google) -> selector de planes, igual
+      // que el registro manual con email/contraseña.
+      res.redirect(req.user.isNew ? '/precios?bienvenida=1' : '/');
     }
   );
 }

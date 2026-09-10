@@ -124,7 +124,10 @@ registerForm.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'No se pudo crear la cuenta.');
-    window.location.href = '/';
+    // Cuenta nueva -> selector de planes, para que elija Gratis/Intermedio/Pro
+    // antes de entrar a la app (ya queda logueada con plan Gratis por
+    // defecto, asi que puede volver a "/" cuando quiera sin perder nada).
+    window.location.href = '/precios?bienvenida=1';
   } catch (err) {
     showError(err.message);
     registerBtn.disabled = false;
