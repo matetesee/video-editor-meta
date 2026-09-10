@@ -29,6 +29,8 @@ const {
   countReferrals,
   recordVideoCompletion,
   getBadges,
+  revokePlan,
+  deleteUser,
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
@@ -332,6 +334,43 @@ app.get('/api/admin/coupons', requireAuthApi, requireAdminApi, async (req, res) 
   } catch (err) {
     console.error('[admin/coupons]', err.message);
     res.status(500).json({ error: 'No se pudieron cargar los cupones.' });
+  }
+});
+
+// Le saca a la cuenta el plan ilimitado (permanente o por dias) y los usos
+// extra acumulados, sin borrar la cuenta. Util cuando alguien abuso de un
+// cupon o pidio que le cancelen el beneficio.
+app.post('/api/admin/users/:id/revoke-plan', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    const target = await findById(targetId);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    await revokePlan(targetId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/revoke-plan]', err.message);
+    res.status(500).json({ error: 'No se pudo quitar el plan.' });
+  }
+});
+
+// Elimina una cuenta por completo (datos, historial y canjes de cupones).
+// No se puede borrar la propia cuenta admin ni a uno mismo desde acá.
+app.delete('/api/admin/users/:id', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    if (targetId === req.session.user.id) {
+      return res.status(400).json({ error: 'No podés eliminar tu propia cuenta desde acá.' });
+    }
+    const target = await findById(targetId);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    if (isAdminEmail(target.email)) {
+      return res.status(400).json({ error: 'No se puede eliminar la cuenta de administrador.' });
+    }
+    await deleteUser(targetId, cleanupFile);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/delete-user]', err.message);
+    res.status(500).json({ error: 'No se pudo eliminar la cuenta.' });
   }
 });
 

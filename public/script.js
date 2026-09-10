@@ -47,6 +47,7 @@ const referralCopyBtn = document.getElementById('referralCopyBtn');
 const referralCount = document.getElementById('referralCount');
 const historyList = document.getElementById('historyList');
 const historyEmpty = document.getElementById('historyEmpty');
+const clockPill = document.getElementById('clockPill');
 const streakPill = document.getElementById('streakPill');
 const badgesGrid = document.getElementById('badgesGrid');
 const badgesSummary = document.getElementById('badgesSummary');
@@ -112,6 +113,23 @@ function renderBadges(badges) {
       </div>`
     )
     .join('');
+}
+
+// ---- Reloj con la hora local ----
+// Usa la zona horaria del propio navegador (Intl), no hace falta geolocalizar
+// por IP: el sistema operativo ya sabe en que huso horario/pais esta el
+// dispositivo, y es mas confiable que una IP (que puede estar detras de VPN,
+// proxy, etc.).
+if (clockPill) {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  const place = tz.includes('/') ? tz.split('/').pop().replace(/_/g, ' ') : tz;
+  clockPill.title = place ? `Hora local — ${place}` : 'Hora local';
+  const updateClock = () => {
+    const now = new Date();
+    clockPill.textContent = `🕐 ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
+  updateClock();
+  setInterval(updateClock, 15000);
 }
 
 (async function initSession() {

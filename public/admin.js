@@ -49,6 +49,8 @@ async function loadUsers() {
         <td><code>${u.referral_code || '—'}</code></td>
         <td>${u.referrals_made}</td>
         <td><button type="button" class="btn-secondary impersonate-btn" data-id="${u.id}" data-email="${u.email}">🔎 Entrar</button></td>
+        <td><button type="button" class="btn-secondary revoke-btn" data-id="${u.id}" data-email="${u.email}">🎟️❌ Quitar plan</button></td>
+        <td><button type="button" class="btn-danger delete-btn" data-id="${u.id}" data-email="${u.email}">🗑️ Eliminar</button></td>
       </tr>`
     )
     .join('');
@@ -68,6 +70,46 @@ async function loadUsers() {
         alert('❌ ' + err.message);
         btn.disabled = false;
         btn.textContent = '🔎 Entrar';
+      }
+    });
+  });
+
+  usersBody.querySelectorAll('.revoke-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const email = btn.dataset.email;
+      if (!confirm(`¿Quitarle el plan ilimitado y los usos extra a ${email}? Vuelve al plan gratis de 3 videos/día. No borra la cuenta.`)) return;
+      btn.disabled = true;
+      btn.textContent = 'Quitando...';
+      try {
+        const r = await fetch(`/api/admin/users/${btn.dataset.id}/revoke-plan`, { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo quitar el plan.');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        alert('❌ ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🎟️❌ Quitar plan';
+      }
+    });
+  });
+
+  usersBody.querySelectorAll('.delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const email = btn.dataset.email;
+      if (!confirm(`¿ELIMINAR la cuenta de ${email}? Se borra para siempre junto con su historial de videos. Esto no se puede deshacer.`)) return;
+      btn.disabled = true;
+      btn.textContent = 'Eliminando...';
+      try {
+        const r = await fetch(`/api/admin/users/${btn.dataset.id}`, { method: 'DELETE' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo eliminar la cuenta.');
+        loadUsers();
+        loadStats();
+      } catch (err) {
+        alert('❌ ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🗑️ Eliminar';
       }
     });
   });

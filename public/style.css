@@ -635,6 +635,28 @@ select {
   border: 1px solid var(--panel-border);
 }
 .btn-secondary:hover { color: var(--text); border-color: var(--text-dim); }
+.btn-danger {
+  border: 1px solid rgba(255, 92, 92, 0.4);
+  border-radius: 10px;
+  padding: 13px 22px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--error);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-danger:hover { background: rgba(255, 92, 92, 0.12); }
+.btn-danger:disabled, .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* En las tablas del admin los botones van mas chicos, si no no entran */
+.table-wrap .btn-secondary, .table-wrap .btn-danger {
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
 
 .progress-wrap { margin-top: 20px; }
 .progress-head {
@@ -866,6 +888,19 @@ select {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.8rem;
+}
+
+/* ---- Reloj con la hora local del dispositivo ---- */
+.clock-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--input-bg);
+  color: var(--text-dim);
+  border: 1px solid var(--panel-border);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Racha de uso ---- */

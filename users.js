@@ -330,6 +330,34 @@ async function cleanupExpiredHistory(deleteFileFn) {
   return rows.length;
 }
 
+// Le saca a una cuenta el plan ilimitado (permanente o por dias) y los usos
+// extra que tuviera acumulados (de cupon o de referidos). Deja el historial
+// de canjes como esta (asi queda registro de que en algun momento uso tal
+// cupon), simplemente anula el beneficio que le habia dado.
+async function revokePlan(userId) {
+  await pool.query(
+    'UPDATE users SET unlimited = false, unlimited_until = NULL, bonus_uses = 0 WHERE id = $1',
+    [userId]
+  );
+}
+
+// Elimina una cuenta por completo. Hay que sacar antes las referencias que
+// apuntan a este usuario (si no, la base rechaza el DELETE por las foreign
+// keys): a quien invito no se le borra su cuenta, solo se le limpia
+// referred_by; el historial de videos se borra (junto con los archivos en
+// disco, via deleteFileFn) y tambien sus canjes de cupones.
+async function deleteUser(userId, deleteFileFn) {
+  await pool.query('UPDATE users SET referred_by = NULL WHERE referred_by = $1', [userId]);
+
+  const { rows: historyRows } = await pool.query('SELECT file_path FROM video_history WHERE user_id = $1', [userId]);
+  for (const row of historyRows) {
+    if (row.file_path && deleteFileFn) deleteFileFn(row.file_path);
+  }
+  await pool.query('DELETE FROM video_history WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM coupon_redemptions WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+}
+
 // ---- Panel de admin ----
 async function getAdminStats() {
   const [{ rows: totalUsersRows }, { rows: unlimitedRows }, { rows: todayRows }, { rows: historyRows }, { rows: referralRows }] =
@@ -386,6 +414,8 @@ module.exports = {
   countReferrals,
   recordVideoCompletion,
   getBadges,
+  revokePlan,
+  deleteUser,
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
