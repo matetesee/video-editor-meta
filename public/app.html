@@ -15,6 +15,14 @@
         <span class="sidebar-brand-text">Editor de Video<br><small>de Dematiu</small></span>
       </div>
 
+      <!--
+        Orden del menu, a proposito: primero las herramientas (lo que la
+        gente usa todo el tiempo), despues lo secundario (Historial,
+        Actualizaciones, Planes, Soporte, en ese orden), y Admin siempre
+        ULTIMO de todos (solo lo ve matetesee@gmail.com). Si en el futuro se
+        agrega una seccion nueva de poca prioridad, va ANTES de Admin pero
+        despues de Soporte — Admin no se mueve de la ultima posicion.
+      -->
       <nav class="sidebar-nav">
         <button type="button" class="section-tab sidebar-item active" data-section="optimizerSection">🎯 <span>Optimizador Meta</span></button>
         <button type="button" class="section-tab sidebar-item" data-section="editorSection">✂️ <span>Mini Editor</span></button>
@@ -22,6 +30,7 @@
         <button type="button" class="section-tab sidebar-item" data-section="historySection">📁 <span>Historial</span></button>
         <button type="button" class="section-tab sidebar-item" data-section="updatesSection">📣 <span>Actualizaciones</span></button>
         <a href="/precios" class="sidebar-item sidebar-link">💳 <span>Planes</span></a>
+        <button type="button" class="section-tab sidebar-item" data-section="supportSection">🛟 <span>Soporte</span></button>
         <a id="adminLink" href="/admin" class="sidebar-item sidebar-link hidden">🛠️ <span>Admin</span></a>
       </nav>
 
@@ -335,6 +344,20 @@
         <p class="meta-hint" style="margin:0 0 20px;">Funciones, mejoras y correcciones, ordenadas desde la más reciente.</p>
         <div id="updatesFeatured"></div>
         <div id="updatesTimeline" class="updates-timeline"></div>
+      </div>
+
+      <div id="supportSection" class="hidden">
+        <p class="section-label" style="margin-top:0;">🛟 Soporte</p>
+        <h2 class="updates-title">¿Necesitás ayuda?</h2>
+        <p class="meta-hint" style="margin:0 0 20px;">Si encontrás un error, tenés una duda o se te ocurre algo para mejorar, escribinos directo.</p>
+        <div class="support-card">
+          <div class="support-card-icon">✉️</div>
+          <div>
+            <p class="support-card-label">Escribinos a</p>
+            <a href="mailto:matetesee@gmail.com" class="support-email">matetesee@gmail.com</a>
+          </div>
+          <button type="button" id="supportCopyBtn" class="btn-secondary">Copiar</button>
+        </div>
       </div>
     </main>
 

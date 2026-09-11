@@ -231,6 +231,19 @@ if (referralCopyBtn) {
   });
 }
 
+const supportCopyBtn = document.getElementById('supportCopyBtn');
+if (supportCopyBtn) {
+  supportCopyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText('matetesee@gmail.com');
+      supportCopyBtn.textContent = '¡Copiado!';
+    } catch (err) {
+      supportCopyBtn.textContent = 'matetesee@gmail.com';
+    }
+    setTimeout(() => (supportCopyBtn.textContent = 'Copiar'), 1500);
+  });
+}
+
 settingsBtn.addEventListener('click', () => {
   couponError.classList.add('hidden');
   couponInput.value = '';
@@ -578,7 +591,7 @@ function showError(msg) {
 document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
-    document.querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #updatesSection').forEach((section) => {
+    document.querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #updatesSection, #supportSection').forEach((section) => {
       section.classList.toggle('hidden', section.id !== tab.dataset.section);
     });
     if (tab.dataset.section === 'historySection' && window.loadHistory) window.loadHistory();

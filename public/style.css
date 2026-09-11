@@ -1314,6 +1314,32 @@ select {
 }
 .update-title { margin: 4px 0 8px; font-size: 1rem; }
 
+/* ---- Soporte ---- */
+.support-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 22px;
+}
+.support-card-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+.support-card > div:not(.support-card-icon) { flex: 1; min-width: 0; }
+.support-card-label { margin: 0 0 2px; font-size: 0.75rem; color: var(--text-dim); }
+.support-email { font-size: 1.05rem; font-weight: 700; color: var(--text); text-decoration: none; }
+.support-email:hover { color: var(--accent-hover); text-decoration: underline; }
+
 /* ---- Reloj con la hora local del dispositivo ---- */
 .clock-pill {
   font-size: 0.75rem;
