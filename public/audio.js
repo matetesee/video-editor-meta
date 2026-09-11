@@ -201,6 +201,8 @@ function pollAudioStatus(jobId) {
         if (window.notifyVideoReady) window.notifyVideoReady('Tu audio ya está listo para descargar.');
         if (window.initFeedbackCard) window.initFeedbackCard(document.getElementById('audioFeedbackCard'), jobId, 'audio');
         if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
+        if (window.showRecordToasts) window.showRecordToasts(data.newRecords);
+        if (window.showPersonalizationToasts) window.showPersonalizationToasts(data.newPersonalizations);
       } else if (data.status === 'cancelled') {
         stopAudioTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();

@@ -238,3 +238,75 @@ window.showAchievementModal = function showAchievementModal(newAchievements, new
   nextBtn.onclick = showNext;
   showNext();
 };
+
+// ---- Toast chico (records nuevos, personalizacion desbloqueada) ----
+// A proposito NO es un modal: records/personalizaciones son mas frecuentes
+// que logros, y el pedido explicito es "evitar spam" — se apila abajo a la
+// derecha, se va solo a los pocos segundos.
+window.showToast = function showToast(title, message) {
+  const stack = document.getElementById('toastStack');
+  if (!stack) return;
+  const el = document.createElement('div');
+  el.className = 'toast-card';
+  el.innerHTML = `<p class="toast-title">${title}</p><p class="toast-message">${message}</p>`;
+  stack.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('toast-visible'));
+  setTimeout(() => {
+    el.classList.remove('toast-visible');
+    setTimeout(() => el.remove(), 400);
+  }, 4200);
+};
+
+// newRecords/newPersonalizations vienen del polling de /api/status, igual
+// que newAchievements/newReward — se muestran como toasts chicos en vez de
+// modal para no ser invasivos.
+window.showRecordToasts = function showRecordToasts(newRecords) {
+  (newRecords || []).forEach((r) => window.showToast(r.title, r.message));
+};
+window.showPersonalizationToasts = function showPersonalizationToasts(newPersonalizations) {
+  (newPersonalizations || []).forEach((p) => {
+    window.showToast('🎨 Nueva personalización desbloqueada', `Desbloqueaste: ${p.name}.`);
+  });
+};
+
+// ---- Insignias al lado del nombre ----
+// badges = { levelBadge: {level,label}|null, planBadge: 'pro'|'intermedio'|null, crown: bool }
+// Orden a proposito (de mas a menos llamativo) para no saturar: corona,
+// plan, nivel. El resto (logros, etc.) vive solo dentro de Mi Progreso.
+window.renderNameBadges = function renderNameBadges(el, badges) {
+  if (!el || !badges) return;
+  const parts = [];
+  if (badges.crown) parts.push(`<span class="name-badge name-badge-crown" title="1.000 videos procesados">👑</span>`);
+  if (badges.planBadge === 'pro') parts.push(`<span class="name-badge name-badge-pro" title="Plan Pro">PRO</span>`);
+  else if (badges.planBadge === 'intermedio') parts.push(`<span class="name-badge name-badge-intermedio" title="Plan Intermedio">INT</span>`);
+  if (badges.levelBadge) parts.push(`<span class="name-badge name-badge-level" title="${badges.levelBadge.label}">Nv.${badges.levelBadge.level}</span>`);
+  el.innerHTML = parts.join('');
+};
+
+// ---- Tema de color desbloqueable (accent) ----
+// Independiente del claro/oscuro (theme.js): esto solo cambia el color de
+// acento, guardado como atributo aparte para no pisar esa logica.
+window.applyAccentTheme = function applyAccentTheme(themeKey) {
+  if (!themeKey || themeKey === 'default') {
+    document.documentElement.removeAttribute('data-accent-theme');
+  } else {
+    document.documentElement.setAttribute('data-accent-theme', themeKey);
+  }
+};
+
+// ---- Aplicar avatar/borde seleccionados sobre el circulo de avatar ----
+window.applyAvatarPersonalization = function applyAvatarPersonalization(personalization) {
+  if (!personalization) return;
+  const fallback = document.getElementById('avatarFallback');
+  const upload = document.getElementById('avatarUpload');
+  if (fallback && personalization.avatar) {
+    const AVATAR_EMOJI = { default: '🧑', coder: '😎', rocket: '🚀', director: '🎬', gem: '💎', crownav: '👑' };
+    fallback.textContent = AVATAR_EMOJI[personalization.avatar] || '🧑';
+  }
+  if (upload) {
+    upload.classList.remove('border-ring5', 'border-ring10', 'border-ring20', 'border-ring30');
+    if (personalization.border && personalization.border !== 'default') {
+      upload.classList.add('border-' + personalization.border);
+    }
+  }
+};

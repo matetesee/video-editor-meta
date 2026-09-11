@@ -34,6 +34,16 @@ const {
   countReferrals,
   updateProgressionOnSuccess,
   getProgressSummary,
+  computeBadges,
+  getPersonalization,
+  setPersonalization,
+  TOOLS,
+  getFavoriteTools,
+  toggleFavoriteTool,
+  getDashboardLayout,
+  setDashboardLayout,
+  resetDashboardLayout,
+  getPersonalRecords,
   revokePlan,
   deleteUser,
   recordVideoHistory,
@@ -184,6 +194,10 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
       isAdmin: isAdminEmail(req.session.user.email),
       streak: (user && user.streak_count) || 0,
       totalVideos: (user && user.total_videos) || 0,
+      badges: user ? computeBadges(user) : null,
+      personalization: user
+        ? { avatar: user.selected_avatar, border: user.selected_border, accentTheme: user.selected_accent_theme }
+        : null,
       impersonating: !!(req.session.impersonator),
       impersonatorEmail: req.session.impersonator ? req.session.impersonator.email : null,
     });
@@ -466,6 +480,99 @@ app.get('/api/progress', requireAuthApi, async (req, res) => {
   }
 });
 
+// ---- Records personales ----
+// Todo sale de columnas que ya se actualizan solas en cada video (ver
+// updateProgressionOnSuccess) — no se recorre el historial completo aca.
+app.get('/api/records', requireAuthApi, async (req, res) => {
+  try {
+    const data = await getPersonalRecords(req.session.user.id);
+    if (!data) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    res.json(data);
+  } catch (err) {
+    console.error('[records]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar tus récords.' });
+  }
+});
+
+// ---- Personalizacion (avatares/bordes/temas, 100% cosmetica) ----
+// setPersonalization valida el nivel REAL (calculado del total_videos que
+// guarda el servidor) antes de aceptar una eleccion — nada de esto confia
+// en un "level" que mande el cliente.
+app.get('/api/personalization', requireAuthApi, async (req, res) => {
+  try {
+    const data = await getPersonalization(req.session.user.id);
+    if (!data) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    res.json(data);
+  } catch (err) {
+    console.error('[personalization]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar la personalización.' });
+  }
+});
+
+app.post('/api/personalization', requireAuthApi, async (req, res) => {
+  try {
+    const { avatar, border, accentTheme } = req.body || {};
+    const result = await setPersonalization(req.session.user.id, { avatar, border, accentTheme });
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[personalization-save]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar tu elección.' });
+  }
+});
+
+// ---- Herramientas favoritas ----
+app.get('/api/favorites', requireAuthApi, async (req, res) => {
+  try {
+    res.json({ tools: TOOLS, favorites: await getFavoriteTools(req.session.user.id) });
+  } catch (err) {
+    console.error('[favorites]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar tus favoritos.' });
+  }
+});
+
+app.post('/api/favorites/:toolKey', requireAuthApi, async (req, res) => {
+  try {
+    const result = await toggleFavoriteTool(req.session.user.id, req.params.toolKey);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('[favorites-toggle]', err.message);
+    res.status(500).json({ error: 'No se pudo actualizar el favorito.' });
+  }
+});
+
+// ---- Dashboard personalizable (orden de cards de "Mi Progreso") ----
+app.get('/api/dashboard-layout', requireAuthApi, async (req, res) => {
+  try {
+    res.json({ layout: await getDashboardLayout(req.session.user.id) });
+  } catch (err) {
+    console.error('[dashboard-layout]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el orden del dashboard.' });
+  }
+});
+
+app.post('/api/dashboard-layout', requireAuthApi, async (req, res) => {
+  try {
+    const result = await setDashboardLayout(req.session.user.id, (req.body || {}).order);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[dashboard-layout-save]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar el orden.' });
+  }
+});
+
+app.post('/api/dashboard-layout/reset', requireAuthApi, async (req, res) => {
+  try {
+    await resetDashboardLayout(req.session.user.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[dashboard-layout-reset]', err.message);
+    res.status(500).json({ error: 'No se pudo restaurar el orden.' });
+  }
+});
+
 // ---- Feedback sobre un video ya procesado ----
 app.get('/api/feedback/reasons', (req, res) => res.json({ reasons: FEEDBACK_REASONS }));
 
@@ -637,6 +744,8 @@ function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
       (async () => {
         let newAchievements = [];
         let newReward = null;
+        let newRecords = [];
+        let newPersonalizations = [];
         if (userId) {
           recordVideoHistory(userId, {
             id: jobId,
@@ -651,20 +760,25 @@ function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
           // un uso del plan (ver requireQuota mas arriba).
           consumeQuotaOnSuccess(userId).catch((err) => console.error(`[quota:${jobId}]`, err.message));
 
-          // Progreso/logros/recompensas: unico lugar de todo el backend que
-          // suma un video al contador de gamificacion, disparado por el
-          // propio ffmpeg terminando bien (no por nada que mande el
-          // frontend).
+          // Progreso/logros/recompensas/records: unico lugar de todo el
+          // backend que suma un video al contador de gamificacion,
+          // disparado por el propio ffmpeg terminando bien (no por nada que
+          // mande el frontend).
           try {
             const bytesSaved = inputSize && outputSize && inputSize > outputSize ? inputSize - outputSize : 0;
-            const result = await updateProgressionOnSuccess(userId, { bytesSaved });
+            const result = await updateProgressionOnSuccess(userId, { bytesSaved, inputSize, outputSize });
             newAchievements = result.newAchievements;
             newReward = result.newReward;
+            newRecords = result.newRecords;
+            newPersonalizations = result.newPersonalizations;
           } catch (err) {
             console.error(`[progress:${jobId}]`, err.message);
           }
         }
-        setJob(jobId, { status: 'done', progress: 100, outputPath, outputSize, newAchievements, newReward });
+        setJob(jobId, {
+          status: 'done', progress: 100, outputPath, outputSize,
+          newAchievements, newReward, newRecords, newPersonalizations,
+        });
       })();
     })
     .save(outputPath);
@@ -1154,6 +1268,8 @@ app.get('/api/status/:jobId', requireAuthApi, (req, res) => {
     outputSize: job.outputSize || 0,
     newAchievements: job.newAchievements || [],
     newReward: job.newReward || null,
+    newRecords: job.newRecords || [],
+    newPersonalizations: job.newPersonalizations || [],
   });
 });
 

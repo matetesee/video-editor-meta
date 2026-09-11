@@ -440,13 +440,16 @@ const FREE_REWARDS = [
 
 // El corazon del sistema: se llama UNA vez por cada video que termina bien.
 // Actualiza total_videos, la racha (+record historico), los dias activos
-// distintos, chequea que logros nuevos se desbloquean, y si corresponde
-// otorga (para siempre) la siguiente recompensa de plan Gratis. Devuelve lo
-// que se desbloqueo recien AHORA, para que el frontend pueda festejarlo una
-// sola vez (se guarda en el job en memoria, ver server.js).
-async function updateProgressionOnSuccess(userId, { bytesSaved } = {}) {
+// distintos, el contador de "videos hoy" (para el record de mejor dia,
+// separado de la cuota para que tambien funcione en cuentas Pro/ilimitadas),
+// el record de mejor compresion (si vino inputSize/outputSize, solo pasa en
+// el Optimizador), chequea que logros nuevos se desbloquean, y si
+// corresponde otorga (para siempre) la siguiente recompensa de plan Gratis.
+// Devuelve lo que se desbloqueo/supero recien AHORA, para que el frontend lo
+// festeje una sola vez (se guarda en el job en memoria, ver server.js).
+async function updateProgressionOnSuccess(userId, { bytesSaved, inputSize, outputSize } = {}) {
   const user = await findById(userId);
-  if (!user) return { newAchievements: [], newReward: null };
+  if (!user) return { newAchievements: [], newReward: null, newRecords: [] };
 
   const today = todayInArgentina();
 
@@ -469,11 +472,58 @@ async function updateProgressionOnSuccess(userId, { bytesSaved } = {}) {
   const newActiveDaysCount = isNewActiveDay ? user.active_days_count + 1 : user.active_days_count;
   const bytesToAdd = Number(bytesSaved) > 0 ? Math.round(Number(bytesSaved)) : 0;
 
+  const newStatsTodayCount = user.stats_today_date === today ? user.stats_today_count + 1 : 1;
+
+  const newRecords = [];
+  let newBestDayCount = user.best_day_count;
+  let newBestDayDate = user.best_day_date;
+  if (newStatsTodayCount > user.best_day_count) {
+    newBestDayCount = newStatsTodayCount;
+    newBestDayDate = today;
+    // Solo festejamos un "nuevo record de mejor dia" a partir del 2do video
+    // (si no, el primer video de tu vida siempre "romperia" el record en 1,
+    // lo cual no se siente como un logro).
+    if (newStatsTodayCount >= 2) {
+      newRecords.push({
+        type: 'best_day',
+        title: '🥇 ¡Nuevo récord personal!',
+        message: `Procesaste ${newStatsTodayCount} videos hoy. Es tu nuevo récord diario.`,
+      });
+    }
+  }
+
+  let newBestCompressionPct = user.best_compression_pct;
+  let newBestCompressionOriginal = user.best_compression_original_size;
+  let newBestCompressionFinal = user.best_compression_final_size;
+  if (Number(inputSize) > 0 && Number(outputSize) > 0 && Number(outputSize) < Number(inputSize)) {
+    const pct = Math.round((1 - Number(outputSize) / Number(inputSize)) * 100);
+    if (pct > user.best_compression_pct) {
+      newBestCompressionPct = pct;
+      newBestCompressionOriginal = Math.round(Number(inputSize));
+      newBestCompressionFinal = Math.round(Number(outputSize));
+      newRecords.push({
+        type: 'best_compression',
+        title: '🥇 ¡Nuevo récord de compresión!',
+        message: `Reduciste el tamaño del archivo un ${pct}%.`,
+      });
+    }
+  }
+
   await pool.query(
     `UPDATE users SET total_videos = $1, streak_count = $2, longest_streak = $3, last_active_date = $4,
-            active_days_count = $5, total_bytes_saved = total_bytes_saved + $6
-     WHERE id = $7`,
-    [newTotalVideos, newStreak, newLongestStreak, today, newActiveDaysCount, bytesToAdd, userId]
+            active_days_count = $5, total_bytes_saved = total_bytes_saved + $6,
+            stats_today_count = $7, stats_today_date = $8,
+            best_day_count = $9, best_day_date = $10,
+            best_compression_pct = $11, best_compression_original_size = $12, best_compression_final_size = $13
+     WHERE id = $14`,
+    [
+      newTotalVideos, newStreak, newLongestStreak, today,
+      newActiveDaysCount, bytesToAdd,
+      newStatsTodayCount, today,
+      newBestDayCount, newBestDayDate,
+      newBestCompressionPct, newBestCompressionOriginal, newBestCompressionFinal,
+      userId,
+    ]
   );
 
   const stats = { totalVideos: newTotalVideos, activeDays: newActiveDaysCount, longestStreak: newLongestStreak };
@@ -504,7 +554,207 @@ async function updateProgressionOnSuccess(userId, { bytesSaved } = {}) {
     await pool.query(`UPDATE users SET free_reward_level = $1, ${col} = now() WHERE id = $2`, [rewardLevel, userId]);
   }
 
-  return { newAchievements, newReward, stats };
+  // Personalizacion: no se "otorga" nada (se calcula del nivel siempre),
+  // pero si el nivel subio y ese salto cruzo el umbral de algun avatar/
+  // borde/tema, vale la pena avisarle con una notificacion chica (no un
+  // modal grande, para no ser invasivo).
+  const oldLevel = computeLevel(user.total_videos).level;
+  const newLevelNum = computeLevel(newTotalVideos).level;
+  const newPersonalizations = [];
+  if (newLevelNum > oldLevel) {
+    [...AVATARS, ...AVATAR_BORDERS, ...ACCENT_THEMES].forEach((item) => {
+      if (item.unlockLevel > oldLevel && item.unlockLevel <= newLevelNum) {
+        newPersonalizations.push({ name: item.name });
+      }
+    });
+  }
+
+  return { newAchievements, newReward, newRecords, newPersonalizations, stats };
+}
+
+// ---- Insignias al lado del nombre ----
+// Todas se CALCULAN al vuelo a partir de datos que ya existen (total_videos,
+// plan) — no hay ninguna columna "tiene badge X": el badge de nivel sube y
+// baja solo con el nivel (que nunca baja, porque total_videos no baja), el
+// de plan depende del plan ACTUAL (desaparece si cancela Pro, a proposito),
+// y la corona de 1000 es simplemente total_videos >= 1000 (que, al no
+// bajar nunca total_videos, ya es permanente sin necesidad de guardar nada
+// aparte).
+const LEVEL_BADGE_THRESHOLDS = [
+  { level: 30, label: 'Nivel 30 — Editor élite' },
+  { level: 20, label: 'Nivel 20 — Editor avanzado' },
+  { level: 10, label: 'Nivel 10 — Editor experimentado' },
+];
+
+function computeBadges(user) {
+  const level = computeLevel(user.total_videos).level;
+  const levelBadge = LEVEL_BADGE_THRESHOLDS.find((b) => level >= b.level) || null;
+  return {
+    levelBadge: levelBadge ? { level: levelBadge.level, label: levelBadge.label } : null,
+    planBadge: user.plan === 'pro' ? 'pro' : user.plan === 'intermedio' ? 'intermedio' : null,
+    crown: user.total_videos >= 1000,
+  };
+}
+
+// ---- Personalizacion (100% cosmetica) ----
+// Igual que con las insignias: lo que esta desbloqueado se calcula del
+// nivel actual, nunca se guarda "ya desbloqueo tal cosa". Lo unico que se
+// persiste es la ELECCION (selected_avatar/selected_border/
+// selected_accent_theme), y solo despues de validar que el nivel real
+// (recalculado en el servidor, nunca confiando en lo que mande el cliente)
+// alcanza para esa eleccion.
+const AVATARS = [
+  { key: 'default', emoji: '🧑', name: 'Básico', unlockLevel: 1 },
+  { key: 'coder', emoji: '😎', name: 'Prolijo', unlockLevel: 5 },
+  { key: 'rocket', emoji: '🚀', name: 'Despegue', unlockLevel: 10 },
+  { key: 'director', emoji: '🎬', name: 'Realizador', unlockLevel: 15 },
+  { key: 'gem', emoji: '💎', name: 'Premium', unlockLevel: 20 },
+  { key: 'crownav', emoji: '👑', name: 'Exclusivo', unlockLevel: 30 },
+];
+
+const AVATAR_BORDERS = [
+  { key: 'default', name: 'Sin borde', unlockLevel: 1, ring: 'none' },
+  { key: 'ring5', name: 'Contorno', unlockLevel: 5, ring: '2px solid var(--text-dim)' },
+  { key: 'ring10', name: 'Avanzado', unlockLevel: 10, ring: '2px solid var(--accent)' },
+  { key: 'ring20', name: 'Premium', unlockLevel: 20, ring: '2px solid #d4a12b' },
+  { key: 'ring30', name: 'Élite', unlockLevel: 30, ring: '3px solid transparent', gradient: true },
+];
+
+const ACCENT_THEMES = [
+  { key: 'default', name: 'Predeterminado', unlockLevel: 1, accent: '#6c5ce7', accentHover: '#8272f0' },
+  { key: 'gold', name: 'Dorado', unlockLevel: 10, accent: '#c8952e', accentHover: '#e0aa3e' },
+  { key: 'teal', name: 'Esmeralda', unlockLevel: 20, accent: '#0d9488', accentHover: '#14b8a6' },
+  { key: 'crimson', name: 'Carmesí', unlockLevel: 30, accent: '#dc2b4e', accentHover: '#ef4b6b' },
+];
+
+function personalizationCatalogFor(userLevel) {
+  const mark = (list) => list.map((i) => ({ ...i, unlocked: userLevel >= i.unlockLevel }));
+  return { avatars: mark(AVATARS), borders: mark(AVATAR_BORDERS), themes: mark(ACCENT_THEMES) };
+}
+
+async function getPersonalization(userId) {
+  const user = await findById(userId);
+  if (!user) return null;
+  const level = computeLevel(user.total_videos).level;
+  return {
+    level,
+    selected: {
+      avatar: user.selected_avatar,
+      border: user.selected_border,
+      accentTheme: user.selected_accent_theme,
+    },
+    ...personalizationCatalogFor(level),
+  };
+}
+
+async function setPersonalization(userId, { avatar, border, accentTheme }) {
+  const user = await findById(userId);
+  if (!user) return { ok: false, error: 'Usuario no encontrado.' };
+  const level = computeLevel(user.total_videos).level;
+
+  const sets = [];
+  const values = [];
+  let i = 1;
+
+  if (avatar !== undefined) {
+    const item = AVATARS.find((a) => a.key === avatar);
+    if (!item || level < item.unlockLevel) return { ok: false, error: 'Todavía no desbloqueaste ese avatar.' };
+    sets.push(`selected_avatar = $${i++}`);
+    values.push(avatar);
+  }
+  if (border !== undefined) {
+    const item = AVATAR_BORDERS.find((b) => b.key === border);
+    if (!item || level < item.unlockLevel) return { ok: false, error: 'Todavía no desbloqueaste ese borde.' };
+    sets.push(`selected_border = $${i++}`);
+    values.push(border);
+  }
+  if (accentTheme !== undefined) {
+    const item = ACCENT_THEMES.find((t) => t.key === accentTheme);
+    if (!item || level < item.unlockLevel) return { ok: false, error: 'Todavía no desbloqueaste ese tema.' };
+    sets.push(`selected_accent_theme = $${i++}`);
+    values.push(accentTheme);
+  }
+  if (sets.length === 0) return { ok: false, error: 'Nada para guardar.' };
+
+  values.push(userId);
+  await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${i}`, values);
+  return { ok: true };
+}
+
+// ---- Herramientas favoritas ----
+const TOOLS = [
+  { key: 'optimizer', icon: '🎯', name: 'Optimizador Meta', section: 'optimizerSection' },
+  { key: 'editor', icon: '✂️', name: 'Mini Editor', section: 'editorSection' },
+  { key: 'audio', icon: '🎧', name: 'Extraer Audio', section: 'audioSection' },
+];
+
+async function getFavoriteTools(userId) {
+  const { rows } = await pool.query('SELECT tool_key FROM user_favorite_tools WHERE user_id = $1', [userId]);
+  return rows.map((r) => r.tool_key);
+}
+
+async function toggleFavoriteTool(userId, toolKey) {
+  if (!TOOLS.some((t) => t.key === toolKey)) return { ok: false, error: 'Herramienta inválida.' };
+  const existing = await pool.query('SELECT 1 FROM user_favorite_tools WHERE user_id = $1 AND tool_key = $2', [userId, toolKey]);
+  if (existing.rows.length > 0) {
+    await pool.query('DELETE FROM user_favorite_tools WHERE user_id = $1 AND tool_key = $2', [userId, toolKey]);
+    return { ok: true, favorited: false };
+  }
+  await pool.query('INSERT INTO user_favorite_tools (user_id, tool_key) VALUES ($1, $2)', [userId, toolKey]);
+  return { ok: true, favorited: true };
+}
+
+// ---- Dashboard personalizable (drag & drop de "Mi Progreso") ----
+const DASHBOARD_CARDS = ['level', 'quota', 'nextAchievement', 'stats', 'favorites', 'recentActivity', 'streak', 'records'];
+
+async function getDashboardLayout(userId) {
+  const user = await findById(userId);
+  if (!user || !user.dashboard_layout) return DASHBOARD_CARDS.slice();
+  try {
+    const saved = JSON.parse(user.dashboard_layout);
+    if (!Array.isArray(saved)) return DASHBOARD_CARDS.slice();
+    // Filtra claves que ya no existan y agrega al final las que falten (por
+    // si se suma una card nueva despues de que el usuario ya guardo un
+    // orden), asi nunca se "pierde" una card por un layout viejo.
+    const known = saved.filter((k) => DASHBOARD_CARDS.includes(k));
+    const missing = DASHBOARD_CARDS.filter((k) => !known.includes(k));
+    return [...known, ...missing];
+  } catch {
+    return DASHBOARD_CARDS.slice();
+  }
+}
+
+async function setDashboardLayout(userId, order) {
+  if (!Array.isArray(order) || !order.every((k) => DASHBOARD_CARDS.includes(k))) {
+    return { ok: false, error: 'Orden inválido.' };
+  }
+  await pool.query('UPDATE users SET dashboard_layout = $1 WHERE id = $2', [JSON.stringify(order), userId]);
+  return { ok: true };
+}
+
+async function resetDashboardLayout(userId) {
+  await pool.query('UPDATE users SET dashboard_layout = NULL WHERE id = $1', [userId]);
+  return { ok: true };
+}
+
+// ---- Records personales ----
+// Todos salen de columnas que ya se actualizan solas en cada video (ver
+// updateProgressionOnSuccess): no hace falta recorrer el historial completo
+// cada vez que el usuario abre el dashboard.
+async function getPersonalRecords(userId) {
+  const user = await findById(userId);
+  if (!user) return null;
+  return {
+    bestDay: { count: user.best_day_count, date: user.best_day_date },
+    longestStreak: user.longest_streak,
+    bestCompression: {
+      pct: user.best_compression_pct,
+      originalSize: Number(user.best_compression_original_size) || 0,
+      finalSize: Number(user.best_compression_final_size) || 0,
+    },
+    totalVideos: user.total_videos,
+    activeDays: user.active_days_count,
+  };
 }
 
 // Todo lo que necesita la pagina "Mi Progreso": nivel, estadisticas, la
@@ -556,6 +806,7 @@ async function getProgressSummary(userId) {
     effectiveDailyLimit: effectiveDailyLimit(user),
     achievements,
     nextRewards,
+    badges: computeBadges(user),
   };
 }
 
@@ -628,6 +879,7 @@ async function deleteUser(userId, deleteFileFn) {
   await pool.query('DELETE FROM user_achievements WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM job_feedback WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM feature_ideas WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM user_favorite_tools WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM users WHERE id = $1', [userId]);
 }
 
@@ -790,8 +1042,22 @@ module.exports = {
   updateProgressionOnSuccess,
   getProgressSummary,
   computeLevel,
+  computeBadges,
   ACHIEVEMENTS,
   FREE_REWARDS,
+  AVATARS,
+  AVATAR_BORDERS,
+  ACCENT_THEMES,
+  getPersonalization,
+  setPersonalization,
+  TOOLS,
+  getFavoriteTools,
+  toggleFavoriteTool,
+  DASHBOARD_CARDS,
+  getDashboardLayout,
+  setDashboardLayout,
+  resetDashboardLayout,
+  getPersonalRecords,
   revokePlan,
   deleteUser,
   recordVideoHistory,

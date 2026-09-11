@@ -1507,3 +1507,183 @@ select {
   flex-wrap: wrap;
 }
 .impersonation-banner strong { color: #ff9500; }
+
+/* ---- Estrellas de favoritos en el sidebar ---- */
+.sidebar-nav-row { display: flex; align-items: center; gap: 2px; }
+.sidebar-nav-row .sidebar-item { flex: 1; min-width: 0; }
+.fav-star-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 6px 8px;
+  border-radius: 6px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.fav-star-btn:hover { color: var(--text); background: var(--input-bg); }
+.fav-star-btn.is-favorite { color: #ffb400; }
+
+/* ---- Insignias al lado del nombre ---- */
+.name-badges { display: inline-flex; gap: 3px; align-items: center; margin-right: 6px; vertical-align: middle; }
+.name-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 20px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.name-badge-crown { font-size: 0.85rem; padding: 0; background: none; }
+.name-badge-pro { background: linear-gradient(90deg, #d4a12b, #f0c869); color: #2a1e00; }
+.name-badge-intermedio { background: rgba(108, 92, 231, 0.18); color: var(--accent-hover); }
+.name-badge-level { background: var(--input-bg); color: var(--text-dim); border: 1px solid var(--panel-border); }
+
+/* ---- Toasts (records nuevos, personalizacion desbloqueada) ---- */
+.toast-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 320px;
+}
+.toast-card {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.toast-card.toast-visible { opacity: 1; transform: translateY(0); }
+.toast-title { margin: 0 0 4px; font-size: 0.85rem; font-weight: 700; color: var(--text); }
+.toast-message { margin: 0; font-size: 0.78rem; color: var(--text-dim); }
+
+/* ---- Personalizacion (avatares/bordes/temas) ---- */
+.personalization-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.personalization-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  cursor: pointer;
+  text-align: center;
+}
+.personalization-item:hover:not(.locked) { border-color: var(--accent); }
+.personalization-item.selected { border-color: var(--accent); background: rgba(108, 92, 231, 0.1); box-shadow: 0 0 0 1px var(--accent); }
+.personalization-item.locked { opacity: 0.5; cursor: not-allowed; }
+.personalization-preview {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+.personalization-preview.theme-swatch { border: 2px solid var(--panel-border); }
+.personalization-name { font-size: 0.72rem; font-weight: 600; color: var(--text); }
+.personalization-lock { font-size: 0.62rem; color: var(--text-dim); }
+
+/* Bordes de avatar desbloqueables: se aplican sobre .avatar-upload (sidebar
+   real) y sobre .personalization-preview (vista previa en la galeria) */
+.avatar-upload.border-ring5, .personalization-preview.border-ring5 { box-shadow: 0 0 0 2px var(--text-dim); }
+.avatar-upload.border-ring10, .personalization-preview.border-ring10 { box-shadow: 0 0 0 2px var(--accent); }
+.avatar-upload.border-ring20, .personalization-preview.border-ring20 { box-shadow: 0 0 0 2px #d4a12b; }
+.avatar-upload.border-ring30, .personalization-preview.border-ring30 {
+  box-shadow: 0 0 0 2px #0f1115;
+  background: linear-gradient(135deg, #d4a12b, #6c5ce7, #0d9488);
+  padding: 2px;
+}
+
+/* ---- Dashboard personalizable ("Mi Progreso") ---- */
+.progress-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+  align-items: start;
+}
+.dashboard-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  cursor: grab;
+}
+.dashboard-card.dragging { opacity: 0.4; }
+.dashboard-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.dashboard-card-handle { color: var(--text-dim); cursor: grab; font-size: 0.9rem; }
+.dashboard-card-title { flex: 1; font-size: 0.85rem; font-weight: 700; color: var(--text); }
+.dashboard-card-move { display: flex; gap: 2px; }
+.dashboard-move-btn {
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.dashboard-move-btn:hover { color: var(--text); border-color: var(--accent); }
+.progress-stats-grid-compact { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+
+.next-achievement-row { display: flex; align-items: center; gap: 10px; }
+.next-achievement-icon { font-size: 1.4rem; }
+.next-achievement-name { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text); }
+
+.favorite-tools-list { display: flex; flex-direction: column; gap: 8px; }
+.favorite-tool-btn {
+  text-align: left;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.favorite-tool-btn:hover { border-color: var(--accent); }
+
+.recent-activity-list { display: flex; flex-direction: column; gap: 8px; }
+.recent-activity-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
+.recent-activity-title { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-activity-meta { color: var(--text-dim); font-size: 0.7rem; white-space: nowrap; }
+
+.streak-card-body { text-align: center; }
+.streak-number { font-size: 1.8rem; font-weight: 800; color: var(--text); }
+
+@media (max-width: 720px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-card { cursor: default; }
+  .dashboard-card-handle { display: none; }
+}
+
+/* ---- Temas de color desbloqueables (solo el accent, ver personalizacion) ----
+   Van al final del archivo a proposito: tienen que ganarle en cascada tanto
+   al bloque claro como al oscuro, sin importar cual este activo. */
+:root[data-accent-theme="gold"] { --accent: #c8952e; --accent-hover: #e0aa3e; }
+:root[data-accent-theme="teal"] { --accent: #0d9488; --accent-hover: #14b8a6; }
+:root[data-accent-theme="crimson"] { --accent: #dc2b4e; --accent-hover: #ef4b6b; }

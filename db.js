@@ -105,6 +105,47 @@ async function initDb() {
   // "optimiza" un tamaño original).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_bytes_saved BIGINT NOT NULL DEFAULT 0;`);
 
+  // Personalizacion (100% cosmetica, ver ACCENT_THEMES/AVATARS/AVATAR_BORDERS
+  // en users.js): que desbloquea cada nivel se CALCULA siempre a partir de
+  // total_videos (no se guarda "esto ya lo desbloqueo" en ningun lado,
+  // porque el nivel nunca baja); lo unico que hay que persistir es CUAL
+  // eligio el usuario para mostrar. set*Personalization en users.js valida
+  // contra el nivel real antes de guardar la eleccion.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS selected_avatar TEXT NOT NULL DEFAULT 'default';`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS selected_border TEXT NOT NULL DEFAULT 'default';`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS selected_accent_theme TEXT NOT NULL DEFAULT 'default';`);
+
+  // Dashboard personalizable ("Mi Progreso"): orden de las cards, guardado
+  // como JSON (array de claves). NULL = usar el orden por defecto.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dashboard_layout TEXT;`);
+
+  // Records personales. stats_today_count/stats_today_date son un contador
+  // de "videos hoy" APARTE de daily_count (que es del sistema de cuota):
+  // este cuenta SIEMPRE, incluso para cuentas Pro/ilimitadas donde
+  // daily_count no se toca — si no, esas cuentas nunca podrian tener un
+  // record de "mejor dia". best_day_* y best_compression_* son el record en
+  // si, actualizado en el momento (updateProgressionOnSuccess), nunca
+  // recorriendo el historial completo.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stats_today_count INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stats_today_date TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS best_day_count INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS best_day_date TEXT;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS best_compression_pct INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS best_compression_original_size BIGINT NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS best_compression_final_size BIGINT NOT NULL DEFAULT 0;`);
+
+  // Herramientas favoritas: una fila por (usuario, herramienta marcada).
+  // Se sincroniza sola entre dispositivos porque vive en la cuenta, no en
+  // localStorage.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_favorite_tools (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      tool_key TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, tool_key)
+    );
+  `);
+
   // Referidos: cada cuenta tiene su propio codigo para invitar, y guarda
   // quien la invito a ella (si vino de un link de invitacion).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;`);

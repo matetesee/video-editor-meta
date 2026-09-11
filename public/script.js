@@ -171,6 +171,18 @@ if (clockPill) {
     setAvatar(data.avatarUrl);
     renderQuota(data.quota);
     renderStreak(data.streak);
+    if (window.renderNameBadges) {
+      window.renderNameBadges(document.getElementById('sidebarBadges'), data.badges);
+      window.renderNameBadges(document.getElementById('settingsBadges'), data.badges);
+    }
+    if (window.applyAccentTheme && data.personalization) window.applyAccentTheme(data.personalization.accentTheme);
+    if (window.applyAvatarPersonalization && data.personalization && !data.avatarUrl) {
+      window.applyAvatarPersonalization(data.personalization);
+    } else if (window.applyAvatarPersonalization && data.personalization) {
+      // el borde se aplica igual, tenga o no foto propia subida
+      window.applyAvatarPersonalization({ border: data.personalization.border });
+    }
+    if (window.loadFavoriteStars) window.loadFavoriteStars();
     if (referralCodeDisplay) referralCodeDisplay.value = data.referralCode || '';
     if (referralCount) referralCount.textContent = `Ya invitaste a ${data.referrals || 0} persona(s).`;
     if (data.isAdmin && adminLink) adminLink.classList.remove('hidden');
@@ -542,6 +554,8 @@ function pollStatus(jobId) {
         if (window.notifyVideoReady) window.notifyVideoReady('Tu video optimizado ya está listo para descargar.');
         if (window.initFeedbackCard) window.initFeedbackCard(document.getElementById('feedbackCard'), jobId, 'optimizer');
         if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
+        if (window.showRecordToasts) window.showRecordToasts(data.newRecords);
+        if (window.showPersonalizationToasts) window.showPersonalizationToasts(data.newPersonalizations);
       } else if (data.status === 'cancelled') {
         stopTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();
@@ -696,3 +710,40 @@ if (ideaSubmitBtn) {
     }
   });
 }
+
+// ---- Estrellas de herramientas favoritas (sidebar) ----
+// Se sincronizan con la cuenta (no localStorage): si entrás desde otro
+// dispositivo, las ves igual.
+window.loadFavoriteStars = async function loadFavoriteStars() {
+  try {
+    const res = await fetch('/api/favorites');
+    if (!res.ok) return;
+    const data = await res.json();
+    const favSet = new Set(data.favorites || []);
+    document.querySelectorAll('.fav-star-btn').forEach((btn) => {
+      btn.textContent = favSet.has(btn.dataset.tool) ? '★' : '☆';
+      btn.classList.toggle('is-favorite', favSet.has(btn.dataset.tool));
+    });
+  } catch (err) {
+    // si falla, las estrellas quedan en su estado por defecto (☆)
+  }
+};
+
+document.querySelectorAll('.fav-star-btn').forEach((btn) => {
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/favorites/${btn.dataset.tool}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo actualizar.');
+      btn.textContent = data.favorited ? '★' : '☆';
+      btn.classList.toggle('is-favorite', data.favorited);
+      if (window.renderFavoritesCard) window.renderFavoritesCard();
+    } catch (err) {
+      // silencioso: la estrella simplemente no cambia
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
