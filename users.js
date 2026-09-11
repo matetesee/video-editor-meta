@@ -580,10 +580,13 @@ async function updateProgressionOnSuccess(userId, { bytesSaved, inputSize, outpu
 // y la corona de 1000 es simplemente total_videos >= 1000 (que, al no
 // bajar nunca total_videos, ya es permanente sin necesidad de guardar nada
 // aparte).
+// Igual que con la personalizacion: reescalado a 1-10 (el tope real del
+// sistema de niveles ya existente) en vez de los "20/30" del pedido
+// original, que en esta escala nunca se alcanzarian.
 const LEVEL_BADGE_THRESHOLDS = [
-  { level: 30, label: 'Nivel 30 — Editor élite' },
-  { level: 20, label: 'Nivel 20 — Editor avanzado' },
-  { level: 10, label: 'Nivel 10 — Editor experimentado' },
+  { level: 10, label: 'Nivel 10 — Editor élite' },
+  { level: 8, label: 'Nivel 8 — Editor avanzado' },
+  { level: 5, label: 'Nivel 5 — Editor experimentado' },
 ];
 
 function computeBadges(user) {
@@ -603,28 +606,35 @@ function computeBadges(user) {
 // selected_accent_theme), y solo despues de validar que el nivel real
 // (recalculado en el servidor, nunca confiando en lo que mande el cliente)
 // alcanza para esa eleccion.
+//
+// OJO con los umbrales: el sistema de niveles YA EXISTENTE tiene un tope de
+// 10 (1.000 videos, ver LEVEL_THRESHOLDS). Los ejemplos "nivel 15/20/30" de
+// el pedido original estaban pensados para una escala mas larga que la que
+// esta app ya tiene — se reescalaron a 1-10 para que TODO sea alcanzable de
+// verdad (nada de dejar un objeto bloqueado para siempre porque el nivel
+// maximo real nunca llega a ese numero).
 const AVATARS = [
   { key: 'default', emoji: '🧑', name: 'Básico', unlockLevel: 1 },
-  { key: 'coder', emoji: '😎', name: 'Prolijo', unlockLevel: 5 },
-  { key: 'rocket', emoji: '🚀', name: 'Despegue', unlockLevel: 10 },
-  { key: 'director', emoji: '🎬', name: 'Realizador', unlockLevel: 15 },
-  { key: 'gem', emoji: '💎', name: 'Premium', unlockLevel: 20 },
-  { key: 'crownav', emoji: '👑', name: 'Exclusivo', unlockLevel: 30 },
+  { key: 'coder', emoji: '😎', name: 'Prolijo', unlockLevel: 3 },
+  { key: 'rocket', emoji: '🚀', name: 'Despegue', unlockLevel: 5 },
+  { key: 'director', emoji: '🎬', name: 'Realizador', unlockLevel: 7 },
+  { key: 'gem', emoji: '💎', name: 'Premium', unlockLevel: 9 },
+  { key: 'crownav', emoji: '👑', name: 'Exclusivo', unlockLevel: 10 },
 ];
 
 const AVATAR_BORDERS = [
   { key: 'default', name: 'Sin borde', unlockLevel: 1, ring: 'none' },
-  { key: 'ring5', name: 'Contorno', unlockLevel: 5, ring: '2px solid var(--text-dim)' },
-  { key: 'ring10', name: 'Avanzado', unlockLevel: 10, ring: '2px solid var(--accent)' },
-  { key: 'ring20', name: 'Premium', unlockLevel: 20, ring: '2px solid #d4a12b' },
-  { key: 'ring30', name: 'Élite', unlockLevel: 30, ring: '3px solid transparent', gradient: true },
+  { key: 'ring5', name: 'Contorno', unlockLevel: 3, ring: '2px solid var(--text-dim)' },
+  { key: 'ring10', name: 'Avanzado', unlockLevel: 6, ring: '2px solid var(--accent)' },
+  { key: 'ring20', name: 'Premium', unlockLevel: 8, ring: '2px solid #d4a12b' },
+  { key: 'ring30', name: 'Élite', unlockLevel: 10, ring: '3px solid transparent', gradient: true },
 ];
 
 const ACCENT_THEMES = [
   { key: 'default', name: 'Predeterminado', unlockLevel: 1, accent: '#6c5ce7', accentHover: '#8272f0' },
-  { key: 'gold', name: 'Dorado', unlockLevel: 10, accent: '#c8952e', accentHover: '#e0aa3e' },
-  { key: 'teal', name: 'Esmeralda', unlockLevel: 20, accent: '#0d9488', accentHover: '#14b8a6' },
-  { key: 'crimson', name: 'Carmesí', unlockLevel: 30, accent: '#dc2b4e', accentHover: '#ef4b6b' },
+  { key: 'gold', name: 'Dorado', unlockLevel: 5, accent: '#c8952e', accentHover: '#e0aa3e' },
+  { key: 'teal', name: 'Esmeralda', unlockLevel: 8, accent: '#0d9488', accentHover: '#14b8a6' },
+  { key: 'crimson', name: 'Carmesí', unlockLevel: 10, accent: '#dc2b4e', accentHover: '#ef4b6b' },
 ];
 
 function personalizationCatalogFor(userLevel) {
