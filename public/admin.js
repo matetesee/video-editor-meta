@@ -38,6 +38,10 @@ async function loadStats() {
     { label: 'Videos hoy', value: s.videosToday },
     { label: 'Videos en historial (24h)', value: s.videosInHistory },
     { label: 'Referidos totales', value: s.totalReferrals },
+    { label: '👍 Feedback positivo', value: (s.feedbackCounts && s.feedbackCounts.up) || 0 },
+    { label: '👎 Feedback negativo', value: (s.feedbackCounts && s.feedbackCounts.down) || 0 },
+    { label: 'Ideas por revisar', value: s.pendingIdeas || 0 },
+    { label: 'Con recompensa de plan Gratis', value: s.usersWithFreeReward || 0 },
   ];
   statGrid.innerHTML = cards
     .map((c) => `<div class="stat-card"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`)
@@ -181,6 +185,98 @@ async function loadCoupons() {
     .join('');
 }
 
+const feedbackBody = document.getElementById('feedbackBody');
+const ideasBody = document.getElementById('ideasBody');
+
+const SOURCE_LABELS = { optimizer: 'Optimizador', editor: 'Mini Editor', audio: 'Extraer Audio' };
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadFeedback() {
+  const res = await fetch('/api/admin/feedback');
+  const rows = await res.json();
+  if (!rows.length) {
+    feedbackBody.innerHTML = '<tr><td colspan="6">Todavía no hay feedback.</td></tr>';
+    return;
+  }
+  feedbackBody.innerHTML = rows
+    .map(
+      (f) => `
+      <tr>
+        <td>${f.email}</td>
+        <td>${SOURCE_LABELS[f.source] || f.source}</td>
+        <td>${f.rating === 'up' ? '👍' : '👎'}</td>
+        <td>${f.reason || '—'}</td>
+        <td>${f.comment || '—'}</td>
+        <td>${fmtDateTime(f.created_at)}</td>
+      </tr>`
+    )
+    .join('');
+}
+
+const IDEA_STATUS_LABELS = {
+  recibida: 'Recibida',
+  en_revision: 'En revisión',
+  planeada: 'Planeada',
+  implementada: 'Implementada',
+  descartada: 'Descartada',
+};
+
+async function loadIdeas() {
+  const res = await fetch('/api/admin/feature-ideas');
+  const rows = await res.json();
+  if (!rows.length) {
+    ideasBody.innerHTML = '<tr><td colspan="6">Todavía no hay ideas propuestas.</td></tr>';
+    return;
+  }
+  ideasBody.innerHTML = rows
+    .map(
+      (idea) => `
+      <tr>
+        <td>${idea.email}</td>
+        <td>${idea.title}</td>
+        <td>${idea.description || '—'}</td>
+        <td>${idea.category}</td>
+        <td>${fmtDateTime(idea.created_at)}</td>
+        <td>
+          <select class="idea-status-select" data-id="${idea.id}">
+            ${Object.entries(IDEA_STATUS_LABELS)
+              .map(([value, label]) => `<option value="${value}" ${idea.status === value ? 'selected' : ''}>${label}</option>`)
+              .join('')}
+          </select>
+        </td>
+      </tr>`
+    )
+    .join('');
+
+  ideasBody.querySelectorAll('.idea-status-select').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const prevValue = sel.dataset.prevValue || sel.value;
+      sel.disabled = true;
+      try {
+        const r = await fetch(`/api/admin/feature-ideas/${sel.dataset.id}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: sel.value }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo cambiar el estado.');
+        sel.dataset.prevValue = sel.value;
+      } catch (err) {
+        alert('❌ ' + err.message);
+        sel.value = prevValue;
+      } finally {
+        sel.disabled = false;
+      }
+    });
+  });
+}
+
 loadStats();
 loadUsers();
 loadCoupons();
+loadFeedback();
+loadIdeas();

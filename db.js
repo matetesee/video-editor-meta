@@ -81,11 +81,29 @@ async function initDb() {
 
   // Gamificacion: total_videos cuenta todos los videos procesados alguna vez
   // (no se resetea nunca, a diferencia de daily_count); streak_count/
-  // last_active_date llevan la racha de dias consecutivos usando la app
-  // (ver recordVideoCompletion en users.js).
+  // last_active_date llevan la racha de dias consecutivos usando la app;
+  // longest_streak es el record historico (la racha actual puede cortarse,
+  // el record no se pierde nunca); active_days_count son dias DISTINTOS
+  // (no necesariamente seguidos) con al menos un video procesado bien.
+  // free_reward_level (0/1/2) es la recompensa PERMANENTE que sube el limite
+  // diario del plan Gratis (3 -> 5 -> 7) por buen uso constante; una vez
+  // otorgada no se pierde ni si el usuario cambia de plan y vuelve a Gratis.
+  // Todo esto se actualiza EXCLUSIVAMENTE desde el hook de "job termino
+  // bien" en server.js (updateProgressionOnSuccess, users.js) — nunca a
+  // partir de nada que mande el cliente.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_videos INTEGER NOT NULL DEFAULT 0;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_count INTEGER NOT NULL DEFAULT 0;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS longest_streak INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_days_count INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_reward_level INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_reward1_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS free_reward2_at TIMESTAMPTZ;`);
+  // Bytes ahorrados acumulados (solo se suma en el Optimizador Meta, que es
+  // el unico flujo donde "tamaño de entrada vs tamaño de salida" es una
+  // comparacion que tiene sentido real; el mini editor une clips, no
+  // "optimiza" un tamaño original).
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_bytes_saved BIGINT NOT NULL DEFAULT 0;`);
 
   // Referidos: cada cuenta tiene su propio codigo para invitar, y guarda
   // quien la invito a ella (si vino de un link de invitacion).
@@ -137,6 +155,63 @@ async function initDb() {
       file_path TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+
+  // Un registro por (usuario, dia calendario en el que proceso algo bien).
+  // La clave primaria compuesta es lo que evita contar el mismo dia dos
+  // veces aunque el hook de progreso se dispare mas de una vez ese dia.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_active_days (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      activity_date TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, activity_date)
+    );
+  `);
+
+  // Logros desbloqueados. La lista de logros posibles (ACHIEVEMENTS) vive en
+  // codigo (users.js), no en la base — esta tabla solo guarda CUALES ya
+  // desbloqueo cada usuario y cuando. La clave primaria compuesta evita
+  // duplicados si el hook se dispara mas de una vez.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_achievements (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      achievement_key TEXT NOT NULL,
+      unlocked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, achievement_key)
+    );
+  `);
+
+  // Feedback (👍/👎) sobre un video ya procesado. job_id es el mismo id que
+  // video_history.id (el jobId que ya se usa en toda la app). UNIQUE en
+  // (user_id, job_id) para que un mismo resultado no reciba dos votos.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS job_feedback (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      job_id UUID NOT NULL,
+      source TEXT NOT NULL,
+      rating TEXT NOT NULL,
+      reason TEXT,
+      comment TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (user_id, job_id)
+    );
+  `);
+
+  // Ideas de nuevas funciones que proponen los usuarios. "status" lo cambia
+  // un admin desde /admin (recibida | en_revision | planeada | implementada
+  // | descartada).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS feature_ideas (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      title TEXT NOT NULL,
+      description TEXT,
+      category TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'recibida',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
 

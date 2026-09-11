@@ -28,6 +28,7 @@
         <button type="button" class="section-tab sidebar-item" data-section="editorSection">✂️ <span>Mini Editor</span></button>
         <button type="button" class="section-tab sidebar-item" data-section="audioSection">🎧 <span>Extraer Audio</span></button>
         <button type="button" class="section-tab sidebar-item" data-section="historySection">📁 <span>Historial</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="progressSection">📈 <span>Mi Progreso</span></button>
         <button type="button" class="section-tab sidebar-item" data-section="updatesSection">📣 <span>Actualizaciones</span></button>
         <a href="/precios" class="sidebar-item sidebar-link">💳 <span>Planes</span></a>
         <button type="button" class="section-tab sidebar-item" data-section="supportSection">🛟 <span>Soporte</span></button>
@@ -155,6 +156,7 @@
           <p>✅ ¡Listo! Tu video quedó procesado y optimizado.</p>
           <p class="result-meta" id="resultMeta"></p>
           <a id="downloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+          <div class="feedback-card hidden" id="feedbackCard"></div>
         </div>
 
         <div class="error hidden" id="errorPanel"></div>
@@ -267,6 +269,7 @@
             <p>✅ ¡Listo! Tu video quedó exportado.</p>
             <p class="result-meta" id="editorResultMeta"></p>
             <a id="editorDownloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+            <div class="feedback-card hidden" id="editorFeedbackCard"></div>
           </div>
 
           <div class="error hidden" id="editorErrorPanel"></div>
@@ -324,6 +327,7 @@
             <p>✅ ¡Listo! Ya tenés el audio.</p>
             <p class="result-meta" id="audioResultMeta"></p>
             <a id="audioDownloadLink" class="btn-primary" download>⬇️ Descargar audio</a>
+            <div class="feedback-card hidden" id="audioFeedbackCard"></div>
           </div>
 
           <div class="error hidden" id="audioErrorPanel"></div>
@@ -336,6 +340,29 @@
           <div id="historyList"></div>
           <p class="empty-hint hidden" id="historyEmpty">Todavía no procesaste ningún video.</p>
         </section>
+      </div>
+
+      <div id="progressSection" class="hidden">
+        <p class="section-label" style="margin-top:0;">📈 Mi Progreso</p>
+        <h2 class="updates-title">Tu progreso</h2>
+        <p class="meta-hint" style="margin:0 0 20px;">Se calcula solo con videos que terminaste de procesar de verdad — subir un archivo o cancelar no suma.</p>
+
+        <div class="progress-level-card">
+          <div class="progress-level-head">
+            <span class="progress-level-badge" id="progressLevelBadge">Nivel 1</span>
+            <span class="progress-level-pct" id="progressLevelPct">0%</span>
+          </div>
+          <div class="level-bar-wrap"><div class="level-bar" id="progressLevelBar"></div></div>
+          <p class="meta-hint" id="progressLevelHint" style="margin:8px 0 0;"></p>
+        </div>
+
+        <div class="progress-stats-grid" id="progressStatsGrid"></div>
+
+        <p class="section-label">Logros</p>
+        <div class="achievements-grid" id="achievementsGrid"></div>
+
+        <p class="section-label" id="rewardsLabel">Próximas recompensas</p>
+        <div id="rewardsGrid"></div>
       </div>
 
       <div id="updatesSection" class="hidden updates-page">
@@ -357,6 +384,34 @@
             <a href="mailto:matetesee@gmail.com" class="support-email">matetesee@gmail.com</a>
           </div>
           <button type="button" id="supportCopyBtn" class="btn-secondary">Copiar</button>
+        </div>
+
+        <p class="section-label">Proponer una función</p>
+        <div class="panel meta-panel">
+          <p class="meta-hint" style="margin:0 0 14px;">¿Qué te gustaría poder hacer con la aplicación?</p>
+          <div class="control-group">
+            <label for="ideaTitleInput">Título de la idea</label>
+            <input type="text" id="ideaTitleInput" placeholder="Ej: Agregar subtítulos automáticos" maxlength="150">
+          </div>
+          <div class="control-group">
+            <label for="ideaDescriptionInput">Descripción</label>
+            <textarea id="ideaDescriptionInput" rows="3" maxlength="1000" placeholder="Contanos un poco más..."></textarea>
+          </div>
+          <div class="control-group">
+            <label for="ideaCategorySelect">Categoría</label>
+            <select id="ideaCategorySelect">
+              <option value="Edición">Edición</option>
+              <option value="Audio">Audio</option>
+              <option value="Conversión">Conversión</option>
+              <option value="Exportación">Exportación</option>
+              <option value="Interfaz">Interfaz</option>
+              <option value="Nueva herramienta">Nueva herramienta</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <button type="button" id="ideaSubmitBtn" class="btn-primary">Enviar idea</button>
+          <p class="meta-hint hidden" id="ideaSuccessMsg" style="margin-top:12px;">¡Gracias! Tu idea fue enviada.</p>
+          <p class="error hidden" id="ideaErrorMsg" style="margin-top:12px;"></p>
         </div>
       </div>
     </main>
@@ -418,9 +473,9 @@
       </div>
 
       <div class="coupon-box">
-        <label>🏅 Tus insignias</label>
-        <p class="meta-hint" style="margin:0 0 10px;" id="badgesSummary"></p>
-        <div class="badges-grid" id="badgesGrid"></div>
+        <label>📈 Tu progreso</label>
+        <p class="meta-hint" style="margin:0 0 10px;">Nivel, racha, logros y recompensas por buen uso, todo en un mismo lugar.</p>
+        <a href="#" data-goto-section="progressSection" class="btn-secondary" style="text-decoration:none;text-align:center;display:block;">Ver Mi Progreso</a>
       </div>
     </div>
   </div>
@@ -447,7 +502,19 @@
     </div>
   </div>
 
+  <!-- Modal de logro/recompensa desbloqueada (lo dispara fun.js::showAchievementModal) -->
+  <div class="celebration-overlay hidden" id="achievementModalOverlay">
+    <div class="celebration-box">
+      <div class="celebration-emoji" id="achievementModalIcon">🏆</div>
+      <p class="update-eyebrow" id="achievementModalEyebrow">¡Nuevo logro desbloqueado!</p>
+      <h2 id="achievementModalTitle"></h2>
+      <p id="achievementModalDesc"></p>
+      <button type="button" class="btn-primary" id="achievementModalNextBtn">¡Genial!</button>
+    </div>
+  </div>
+
   <script src="fun.js"></script>
+  <script src="progress.js"></script>
   <script src="script.js"></script>
   <script src="editor.js"></script>
   <script src="audio.js"></script>

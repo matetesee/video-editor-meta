@@ -735,6 +735,7 @@ editorExportBtn.addEventListener('click', async () => {
   editorExportBtn.textContent = 'Subiendo...';
   editorErrorPanel.classList.add('hidden');
   editorResultPanel.classList.add('hidden');
+  document.getElementById('editorFeedbackCard').classList.add('hidden');
   editorProgressWrap.classList.remove('hidden');
   editorProgressFill.classList.add('indeterminate');
   editorProgressText.textContent = 'Subiendo clips...';
@@ -824,6 +825,8 @@ function pollEditorStatus(jobId) {
         editorExportBtn.textContent = '🎬 Exportar video';
         if (window.fireConfetti) window.fireConfetti();
         if (window.notifyVideoReady) window.notifyVideoReady('Tu video del Mini Editor ya está listo para descargar.');
+        if (window.initFeedbackCard) window.initFeedbackCard(document.getElementById('editorFeedbackCard'), jobId, 'editor');
+        if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
       } else if (data.status === 'cancelled') {
         stopEditorTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();

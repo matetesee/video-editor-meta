@@ -123,3 +123,118 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// ---- Feedback rapido despues de un resultado (👍/👎) ----
+// Un mismo widget reutilizado por el Optimizador, el Mini Editor y Extraer
+// Audio (cada uno le pasa su propio contenedor y jobId). El backend valida
+// que jobId sea un video que de verdad termino bien y sea del usuario
+// logueado, y que no haya votado ya ese mismo trabajo (ver /api/feedback).
+const FEEDBACK_REASONS_LOCAL = [
+  'Perdió demasiada calidad',
+  'El archivo sigue siendo muy pesado',
+  'Problema con el audio',
+  'Problema con la resolución',
+  'El video no funciona correctamente',
+  'Otro',
+];
+
+window.initFeedbackCard = function initFeedbackCard(container, jobId, source) {
+  if (!container || !jobId) return;
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <p class="feedback-question">¿El resultado quedó bien?</p>
+    <div class="feedback-actions">
+      <button type="button" class="feedback-btn" data-vote="up">👍 Sí</button>
+      <button type="button" class="feedback-btn" data-vote="down">👎 No</button>
+    </div>
+  `;
+
+  const send = async (rating, reason, comment) => {
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, source, rating, reason, comment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar tu opinión.');
+      container.innerHTML = `<p class="feedback-thanks">✅ ¡Gracias por tu feedback!</p>`;
+    } catch (err) {
+      container.innerHTML = `<p class="feedback-thanks">❌ ${err.message}</p>`;
+    }
+  };
+
+  container.querySelector('[data-vote="up"]').addEventListener('click', () => send('up'));
+  container.querySelector('[data-vote="down"]').addEventListener('click', () => {
+    container.innerHTML = `
+      <p class="feedback-question">¿Qué estuvo mal?</p>
+      <div class="feedback-reasons">
+        ${FEEDBACK_REASONS_LOCAL.map((r) => `<button type="button" class="feedback-reason-btn" data-reason="${r}">${r}</button>`).join('')}
+      </div>
+    `;
+    container.querySelectorAll('.feedback-reason-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.reason === 'Otro') {
+          container.innerHTML = `
+            <p class="feedback-question">Contanos qué pasó (opcional)</p>
+            <textarea id="feedbackCommentInput" maxlength="500" rows="2" placeholder="Escribí acá..."></textarea>
+            <button type="button" class="btn-secondary" id="feedbackSendCommentBtn" style="margin-top:8px;">Enviar</button>
+          `;
+          container.querySelector('#feedbackSendCommentBtn').addEventListener('click', () => {
+            send('down', 'Otro', container.querySelector('#feedbackCommentInput').value);
+          });
+        } else {
+          send('down', btn.dataset.reason, '');
+        }
+      });
+    });
+  });
+};
+
+// ---- Modal de logro/recompensa desbloqueada ----
+// newAchievements/newReward vienen del polling de /api/status (ver
+// script.js/editor.js/audio.js): el backend los calcula UNA sola vez, en el
+// momento exacto en que el video termina bien, asi que este modal solo se
+// muestra la primera vez que se ven (el polling se corta apenas el job
+// pasa a 'done', no se vuelve a pedir el mismo estado despues).
+window.showAchievementModal = function showAchievementModal(newAchievements, newReward) {
+  const overlay = document.getElementById('achievementModalOverlay');
+  if (!overlay) return;
+  const queue = [];
+  (newAchievements || []).forEach((a) => queue.push({ kind: 'achievement', ...a }));
+  if (newReward) queue.push({ kind: 'reward', ...newReward });
+  if (queue.length === 0) return;
+
+  const iconEl = document.getElementById('achievementModalIcon');
+  const eyebrowEl = document.getElementById('achievementModalEyebrow');
+  const titleEl = document.getElementById('achievementModalTitle');
+  const descEl = document.getElementById('achievementModalDesc');
+  const nextBtn = document.getElementById('achievementModalNextBtn');
+
+  let i = 0;
+  const showNext = () => {
+    if (i >= queue.length) {
+      overlay.classList.add('hidden');
+      return;
+    }
+    const item = queue[i++];
+    if (item.kind === 'achievement') {
+      eyebrowEl.textContent = '🏆 ¡Nuevo logro desbloqueado!';
+      iconEl.textContent = item.icon;
+      titleEl.textContent = item.name;
+      descEl.textContent = item.desc;
+    } else {
+      eyebrowEl.textContent = item.title;
+      iconEl.textContent = item.level === 2 ? '👑' : '🎁';
+      titleEl.textContent = `${item.dailyLimit} videos gratis por día`;
+      descEl.textContent = item.message;
+    }
+    overlay.classList.remove('hidden');
+    if (window.fireConfetti) {
+      window.fireConfetti();
+      setTimeout(() => window.fireConfetti(), 350);
+    }
+  };
+  nextBtn.onclick = showNext;
+  showNext();
+};

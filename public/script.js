@@ -54,8 +54,6 @@ const historyList = document.getElementById('historyList');
 const historyEmpty = document.getElementById('historyEmpty');
 const clockPill = document.getElementById('clockPill');
 const streakPill = document.getElementById('streakPill');
-const badgesGrid = document.getElementById('badgesGrid');
-const badgesSummary = document.getElementById('badgesSummary');
 const impersonationBanner = document.getElementById('impersonationBanner');
 const impersonationEmail = document.getElementById('impersonationEmail');
 const stopImpersonateBtn = document.getElementById('stopImpersonateBtn');
@@ -139,22 +137,6 @@ function renderStreak(streak) {
   }
 }
 
-function renderBadges(badges) {
-  if (!badgesGrid) return;
-  const list = badges || [];
-  const unlockedCount = list.filter((b) => b.unlocked).length;
-  if (badgesSummary) badgesSummary.textContent = `Desbloqueaste ${unlockedCount} de ${list.length}.`;
-  badgesGrid.innerHTML = list
-    .map(
-      (b) => `
-      <div class="badge${b.unlocked ? ' unlocked' : ''}" title="${b.label}${b.unlocked ? '' : ' (todavía no)'}">
-        <span class="badge-icon">${b.icon}</span>
-        <span class="badge-label">${b.label}</span>
-      </div>`
-    )
-    .join('');
-}
-
 // ---- Reloj con la hora local ----
 // Usa la zona horaria del propio navegador (Intl), no hace falta geolocalizar
 // por IP: el sistema operativo ya sabe en que huso horario/pais esta el
@@ -189,7 +171,6 @@ if (clockPill) {
     setAvatar(data.avatarUrl);
     renderQuota(data.quota);
     renderStreak(data.streak);
-    renderBadges(data.badges);
     if (referralCodeDisplay) referralCodeDisplay.value = data.referralCode || '';
     if (referralCount) referralCount.textContent = `Ya invitaste a ${data.referrals || 0} persona(s).`;
     if (data.isAdmin && adminLink) adminLink.classList.remove('hidden');
@@ -462,6 +443,7 @@ processBtn.addEventListener('click', async () => {
   processBtn.textContent = 'Subiendo...';
   errorPanel.classList.add('hidden');
   resultPanel.classList.add('hidden');
+  document.getElementById('feedbackCard').classList.add('hidden');
   progressWrap.classList.remove('hidden');
   progressFill.classList.add('indeterminate');
   progressText.textContent = 'Subiendo video...';
@@ -558,6 +540,8 @@ function pollStatus(jobId) {
         processBtn.textContent = '⚙️ Procesar video';
         if (window.fireConfetti) window.fireConfetti();
         if (window.notifyVideoReady) window.notifyVideoReady('Tu video optimizado ya está listo para descargar.');
+        if (window.initFeedbackCard) window.initFeedbackCard(document.getElementById('feedbackCard'), jobId, 'optimizer');
+        if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
       } else if (data.status === 'cancelled') {
         stopTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();
@@ -588,14 +572,32 @@ function showError(msg) {
 }
 
 // ---- Navegación entre secciones (Optimizador / Mini Editor / Historial) ----
+function goToSection(sectionId) {
+  const tab = document.querySelector(`.section-tab[data-section="${sectionId}"]`);
+  if (tab) tab.click();
+}
+
 document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
-    document.querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #updatesSection, #supportSection').forEach((section) => {
-      section.classList.toggle('hidden', section.id !== tab.dataset.section);
-    });
+    document
+      .querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #progressSection, #updatesSection, #supportSection')
+      .forEach((section) => {
+        section.classList.toggle('hidden', section.id !== tab.dataset.section);
+      });
     if (tab.dataset.section === 'historySection' && window.loadHistory) window.loadHistory();
     if (tab.dataset.section === 'updatesSection' && window.renderUpdates) window.renderUpdates();
+    if (tab.dataset.section === 'progressSection' && window.renderProgress) window.renderProgress();
+  });
+});
+
+// Links tipo "Ver Mi Progreso" desde dentro de Configuración: cierran el
+// modal y cambian de pestaña como si el usuario hubiera tocado el menu.
+document.querySelectorAll('[data-goto-section]').forEach((el) => {
+  el.addEventListener('click', (e) => {
+    e.preventDefault();
+    settingsOverlay.classList.add('hidden');
+    goToSection(el.dataset.gotoSection);
   });
 });
 
@@ -655,3 +657,42 @@ window.loadHistory = async function loadHistory() {
     historyEmpty.classList.remove('hidden');
   }
 };
+
+// ---- Proponer una función (dentro de Soporte) ----
+const ideaSubmitBtn = document.getElementById('ideaSubmitBtn');
+if (ideaSubmitBtn) {
+  ideaSubmitBtn.addEventListener('click', async () => {
+    const title = document.getElementById('ideaTitleInput').value.trim();
+    const description = document.getElementById('ideaDescriptionInput').value.trim();
+    const category = document.getElementById('ideaCategorySelect').value;
+    const errorMsg = document.getElementById('ideaErrorMsg');
+    const successMsg = document.getElementById('ideaSuccessMsg');
+    errorMsg.classList.add('hidden');
+    successMsg.classList.add('hidden');
+    if (!title) {
+      errorMsg.textContent = '❌ Ponele un título a tu idea.';
+      errorMsg.classList.remove('hidden');
+      return;
+    }
+    ideaSubmitBtn.disabled = true;
+    ideaSubmitBtn.textContent = 'Enviando...';
+    try {
+      const res = await fetch('/api/feature-ideas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, category }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar tu idea.');
+      successMsg.classList.remove('hidden');
+      document.getElementById('ideaTitleInput').value = '';
+      document.getElementById('ideaDescriptionInput').value = '';
+    } catch (err) {
+      errorMsg.textContent = '❌ ' + err.message;
+      errorMsg.classList.remove('hidden');
+    } finally {
+      ideaSubmitBtn.disabled = false;
+      ideaSubmitBtn.textContent = 'Enviar idea';
+    }
+  });
+}

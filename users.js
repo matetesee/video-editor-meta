@@ -125,10 +125,20 @@ function getPlanInfo(planKey) {
 // El limite diario EFECTIVO: un cupon de ilimitado (isUnlimitedNow, ver
 // applyCoupon) pisa cualquier plan, igual que ya pisaba el limite fijo de
 // 3 antes de que existieran los planes — asi el cupon "dematiu" del equipo
-// sigue funcionando igual que siempre.
+// sigue funcionando igual que siempre. En el plan Gratis, ademas, se aplica
+// la recompensa PERMANENTE por buen uso (free_reward_level, ver mas abajo
+// "Progreso, logros y recompensas"): 3 normal -> 5 con la primera
+// recompensa -> 7 como tope absoluto. Esto NUNCA se calcula ni se confia en
+// nada que mande el cliente: free_reward_level vive en la base y solo lo
+// escribe updateProgressionOnSuccess, en el propio servidor.
 function effectiveDailyLimit(user) {
   if (isUnlimitedNow(user)) return null;
-  return getPlanInfo(user.plan).dailyLimit;
+  const plan = getPlanInfo(user.plan);
+  if (plan.dailyLimit === null) return null; // Pro: ilimitado, sin importar la gamificacion
+  if (user.plan !== 'free') return plan.dailyLimit; // Intermedio: fijo en 15, la recompensa es solo para Gratis
+  if (user.free_reward_level >= 2) return 7;
+  if (user.free_reward_level >= 1) return 5;
+  return plan.dailyLimit; // Gratis sin recompensa: 3
 }
 
 // Devuelve el estado de cuota SIN consumir nada (para mostrar en el
@@ -152,6 +162,7 @@ async function getQuotaStatus(userId) {
       plan: user.plan,
       planName: plan.name,
       requestedPlan: user.requested_plan,
+      freeRewardLevel: user.free_reward_level,
     };
   }
   const today = todayInArgentina();
@@ -166,6 +177,7 @@ async function getQuotaStatus(userId) {
     plan: user.plan,
     planName: plan.name,
     requestedPlan: user.requested_plan,
+    freeRewardLevel: user.free_reward_level,
   };
 }
 
@@ -365,47 +377,186 @@ async function countReferrals(userId) {
   return rows[0].n;
 }
 
-// ---- Gamificacion: racha de uso + insignias ----
+// ---- Progreso, niveles, logros y recompensas ----
+// Todo lo de aca abajo se actualiza UNA sola vez por video: desde
+// updateProgressionOnSuccess, llamada exclusivamente por el 'end' de runJob
+// en server.js (el mismo evento de "ffmpeg termino bien" que ya dispara
+// consumeQuotaOnSuccess y recordVideoHistory). No hay ningun endpoint que
+// reciba de un cliente "sumame un video" — el unico lugar que incrementa
+// estos contadores es este, disparado por el propio proceso de ffmpeg en el
+// servidor. Asi es imposible manipularlo desde la consola del navegador: no
+// hay ningun valor de progreso que el frontend le mande al backend, todo se
+// lee siempre desde la base.
 
-// Se llama cada vez que un job termina bien (ver el 'end' de runJob en
-// server.js). Suma 1 al contador total (para las insignias de cantidad) y
-// actualiza la racha de dias consecutivos: si hoy ya estaba contado no
-// vuelve a subir la racha, si el ultimo dia activo fue ayer la extiende, y
-// si hubo un salto de mas de un dia la reinicia en 1.
-async function recordVideoCompletion(userId) {
-  const user = await findById(userId);
-  if (!user) return;
-  const today = todayInArgentina();
-  if (user.last_active_date === today) {
-    await pool.query('UPDATE users SET total_videos = total_videos + 1 WHERE id = $1', [userId]);
-    return;
+// Cuantos videos hacen falta para CADA nivel (indice 0 = nivel 1). Los
+// primeros niveles son rapidos a proposito; llegar a los ultimos requiere
+// meses de uso real.
+const LEVEL_THRESHOLDS = [0, 10, 25, 50, 100, 175, 275, 400, 600, 1000];
+
+function computeLevel(totalVideos) {
+  let levelIdx = 0;
+  for (let i = 1; i < LEVEL_THRESHOLDS.length; i++) {
+    if (totalVideos >= LEVEL_THRESHOLDS[i]) levelIdx = i;
   }
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: ARG_TZ });
-  const newStreak = user.last_active_date === yesterday ? user.streak_count + 1 : 1;
-  await pool.query(
-    'UPDATE users SET total_videos = total_videos + 1, streak_count = $1, last_active_date = $2 WHERE id = $3',
-    [newStreak, today, userId]
-  );
+  const current = LEVEL_THRESHOLDS[levelIdx];
+  const next = LEVEL_THRESHOLDS[levelIdx + 1];
+  const isMax = next === undefined;
+  return {
+    level: levelIdx + 1,
+    maxLevel: isMax,
+    currentThreshold: current,
+    nextThreshold: isMax ? null : next,
+    videosToNext: isMax ? 0 : next - totalVideos,
+    progressPct: isMax ? 100 : Math.max(0, Math.min(100, Math.round(((totalVideos - current) / (next - current)) * 100))),
+  };
 }
 
-// Insignias calculadas al vuelo a partir de datos que ya tenemos (no hace
-// falta una tabla aparte: no se "otorgan" una vez y quedan, se recalculan
-// segun el estado actual de la cuenta cada vez que se piden).
-async function getBadges(userId) {
+// Catalogo de logros. "check" recibe {totalVideos, activeDays, longestStreak}
+// (el estado YA actualizado, en la misma transaccion logica que el video que
+// se acaba de contar). Los primeros son faciles a proposito para dar un
+// primer empujon; los ultimos piden meses de uso constante, no se
+// desbloquean "de arranque".
+const ACHIEVEMENTS = [
+  { key: 'first_video', icon: '🎬', name: 'Primer paso', desc: 'Procesá tu primer video.', check: (s) => s.totalVideos >= 1 },
+  { key: 'starting_25', icon: '🎬', name: 'Arrancando', desc: 'Procesá 25 videos.', check: (s) => s.totalVideos >= 25 },
+  { key: 'active_7', icon: '🔥', name: 'En racha', desc: 'Usá la aplicación 7 días diferentes.', check: (s) => s.activeDays >= 7 },
+  { key: 'frequent_100', icon: '🎞️', name: 'Editor frecuente', desc: 'Procesá 100 videos.', check: (s) => s.totalVideos >= 100 },
+  { key: 'expert_250', icon: '🏆', name: 'Editor experto', desc: 'Procesá 250 videos.', check: (s) => s.totalVideos >= 250 },
+  { key: 'active_15', icon: '💪', name: 'Constancia', desc: 'Procesá al menos un video durante 15 días diferentes.', check: (s) => s.activeDays >= 15 },
+  { key: 'streak_30', icon: '🔥', name: 'Imparable', desc: 'Alcanzá una racha de 30 días.', check: (s) => s.longestStreak >= 30 },
+  { key: 'club_500', icon: '🎬', name: '500 Club', desc: 'Procesá 500 videos.', check: (s) => s.totalVideos >= 500 },
+  { key: 'master_1000', icon: '👑', name: 'Maestro del video', desc: 'Procesá 1.000 videos.', check: (s) => s.totalVideos >= 1000 },
+];
+
+// Recompensas PERMANENTES para el plan Gratis. level 1 sube el limite a 5,
+// level 2 (el tope absoluto) lo sube a 7 — nunca mas alla, sin importar
+// cuantos logros junte despues. Requieren uso real y sostenido (no solo
+// "cantidad", tambien "dias distintos" y, para la maxima, una racha
+// historica minima) para que no se puedan farmear rapido.
+const FREE_REWARDS = [
+  { level: 1, dailyLimit: 5, videos: 100, activeDays: 20, streak: 0, title: '🎁 ¡Desbloqueaste una recompensa permanente!', message: 'Tu límite gratuito aumentó de 3 a 5 videos por día.' },
+  { level: 2, dailyLimit: 7, videos: 500, activeDays: 60, streak: 15, title: '👑 Recompensa máxima del plan Gratis', message: 'Por tu constancia, ahora podés procesar hasta 7 videos por día gratis.' },
+];
+
+// El corazon del sistema: se llama UNA vez por cada video que termina bien.
+// Actualiza total_videos, la racha (+record historico), los dias activos
+// distintos, chequea que logros nuevos se desbloquean, y si corresponde
+// otorga (para siempre) la siguiente recompensa de plan Gratis. Devuelve lo
+// que se desbloqueo recien AHORA, para que el frontend pueda festejarlo una
+// sola vez (se guarda en el job en memoria, ver server.js).
+async function updateProgressionOnSuccess(userId, { bytesSaved } = {}) {
   const user = await findById(userId);
-  if (!user) return [];
-  const referrals = await countReferrals(userId);
-  const unlimited = isUnlimitedNow(user);
-  return [
-    { id: 'first_video', icon: '🎬', label: 'Primer video', unlocked: user.total_videos >= 1 },
-    { id: 'ten_videos', icon: '📼', label: '10 videos procesados', unlocked: user.total_videos >= 10 },
-    { id: 'fifty_videos', icon: '🚀', label: '50 videos procesados', unlocked: user.total_videos >= 50 },
-    { id: 'streak_3', icon: '🔥', label: 'Racha de 3 días', unlocked: user.streak_count >= 3 },
-    { id: 'streak_7', icon: '🔥', label: 'Racha de 7 días', unlocked: user.streak_count >= 7 },
-    { id: 'first_referral', icon: '🤝', label: 'Primer referido', unlocked: referrals >= 1 },
-    { id: 'five_referrals', icon: '🌟', label: '5 referidos', unlocked: referrals >= 5 },
-    { id: 'unlimited', icon: '✨', label: 'Cuenta ilimitada', unlocked: unlimited },
-  ];
+  if (!user) return { newAchievements: [], newReward: null };
+
+  const today = todayInArgentina();
+
+  // Dia activo: PRIMARY KEY (user_id, activity_date) hace que un insert
+  // repetido el mismo dia no haga nada — asi "dias activos" nunca se cuenta
+  // dos veces así se dispare este hook mas de una vez el mismo dia.
+  const inserted = await pool.query(
+    'INSERT INTO user_active_days (user_id, activity_date) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING activity_date',
+    [userId, today]
+  );
+  const isNewActiveDay = inserted.rows.length > 0;
+
+  let newStreak = user.streak_count;
+  if (user.last_active_date !== today) {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: ARG_TZ });
+    newStreak = user.last_active_date === yesterday ? user.streak_count + 1 : 1;
+  }
+  const newLongestStreak = Math.max(user.longest_streak, newStreak);
+  const newTotalVideos = user.total_videos + 1;
+  const newActiveDaysCount = isNewActiveDay ? user.active_days_count + 1 : user.active_days_count;
+  const bytesToAdd = Number(bytesSaved) > 0 ? Math.round(Number(bytesSaved)) : 0;
+
+  await pool.query(
+    `UPDATE users SET total_videos = $1, streak_count = $2, longest_streak = $3, last_active_date = $4,
+            active_days_count = $5, total_bytes_saved = total_bytes_saved + $6
+     WHERE id = $7`,
+    [newTotalVideos, newStreak, newLongestStreak, today, newActiveDaysCount, bytesToAdd, userId]
+  );
+
+  const stats = { totalVideos: newTotalVideos, activeDays: newActiveDaysCount, longestStreak: newLongestStreak };
+
+  const { rows: existingRows } = await pool.query('SELECT achievement_key FROM user_achievements WHERE user_id = $1', [userId]);
+  const already = new Set(existingRows.map((r) => r.achievement_key));
+  const newAchievements = [];
+  for (const ach of ACHIEVEMENTS) {
+    if (!already.has(ach.key) && ach.check(stats)) {
+      await pool.query(
+        'INSERT INTO user_achievements (user_id, achievement_key) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [userId, ach.key]
+      );
+      newAchievements.push({ key: ach.key, icon: ach.icon, name: ach.name, desc: ach.desc });
+    }
+  }
+
+  let newReward = null;
+  let rewardLevel = user.free_reward_level;
+  for (const r of FREE_REWARDS) {
+    if (rewardLevel < r.level && stats.totalVideos >= r.videos && stats.activeDays >= r.activeDays && stats.longestStreak >= r.streak) {
+      rewardLevel = r.level;
+      newReward = r;
+    }
+  }
+  if (newReward) {
+    const col = newReward.level === 1 ? 'free_reward1_at' : 'free_reward2_at';
+    await pool.query(`UPDATE users SET free_reward_level = $1, ${col} = now() WHERE id = $2`, [rewardLevel, userId]);
+  }
+
+  return { newAchievements, newReward, stats };
+}
+
+// Todo lo que necesita la pagina "Mi Progreso": nivel, estadisticas, la
+// lista completa de logros (bloqueados incluidos, para que sean objetivos
+// visibles) y el detalle de cuanto falta para cada proxima recompensa.
+async function getProgressSummary(userId) {
+  const user = await findById(userId);
+  if (!user) return null;
+
+  const level = computeLevel(user.total_videos);
+  const { rows } = await pool.query('SELECT achievement_key, unlocked_at FROM user_achievements WHERE user_id = $1', [userId]);
+  const unlockedMap = {};
+  rows.forEach((r) => { unlockedMap[r.achievement_key] = r.unlocked_at; });
+  const achievements = ACHIEVEMENTS.map((a) => ({
+    key: a.key,
+    icon: a.icon,
+    name: a.name,
+    desc: a.desc,
+    unlocked: !!unlockedMap[a.key],
+    unlockedAt: unlockedMap[a.key] || null,
+  }));
+
+  const stats = {
+    totalVideos: user.total_videos,
+    activeDays: user.active_days_count,
+    streak: user.streak_count,
+    longestStreak: user.longest_streak,
+    bytesSaved: Number(user.total_bytes_saved) || 0,
+    achievementsUnlocked: achievements.filter((a) => a.unlocked).length,
+    achievementsTotal: achievements.length,
+  };
+
+  const nextRewards = FREE_REWARDS.filter((r) => user.free_reward_level < r.level).map((r) => ({
+    level: r.level,
+    dailyLimit: r.dailyLimit,
+    videos: r.videos,
+    activeDays: r.activeDays,
+    streak: r.streak,
+    videosProgress: Math.min(stats.totalVideos, r.videos),
+    activeDaysProgress: Math.min(stats.activeDays, r.activeDays),
+    streakProgress: Math.min(stats.longestStreak, r.streak),
+  }));
+
+  return {
+    level,
+    stats,
+    plan: user.plan,
+    freeRewardLevel: user.free_reward_level,
+    effectiveDailyLimit: effectiveDailyLimit(user),
+    achievements,
+    nextRewards,
+  };
 }
 
 // ---- Historial de videos ----
@@ -473,7 +624,84 @@ async function deleteUser(userId, deleteFileFn) {
   }
   await pool.query('DELETE FROM video_history WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM coupon_redemptions WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM user_active_days WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM user_achievements WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM job_feedback WHERE user_id = $1', [userId]);
+  await pool.query('DELETE FROM feature_ideas WHERE user_id = $1', [userId]);
   await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+}
+
+// ---- Feedback sobre un video ya procesado ----
+const FEEDBACK_REASONS = [
+  'Perdió demasiada calidad',
+  'El archivo sigue siendo muy pesado',
+  'Problema con el audio',
+  'Problema con la resolución',
+  'El video no funciona correctamente',
+  'Otro',
+];
+
+// jobId = el mismo id que video_history.id. El UNIQUE (user_id, job_id) de
+// la tabla es lo que de verdad evita el doble voto (no alcanza con
+// controlarlo en el frontend): si llega dos veces, la segunda choca contra
+// la restriccion y se informa como "ya opinaste", no se duplica nada.
+async function submitJobFeedback(userId, { jobId, source, rating, reason, comment }) {
+  if (!jobId || !['up', 'down'].includes(rating)) return { ok: false, error: 'Feedback inválido.' };
+  const cleanReason = rating === 'down' ? String(reason || '').slice(0, 200) : null;
+  const cleanComment = String(comment || '').trim().slice(0, 500) || null;
+  try {
+    await pool.query(
+      `INSERT INTO job_feedback (user_id, job_id, source, rating, reason, comment)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, jobId, source || 'optimizer', rating, cleanReason, cleanComment]
+    );
+    return { ok: true };
+  } catch (err) {
+    if (err.code === '23505') return { ok: false, error: 'Ya nos dijiste qué te pareció este video.' };
+    throw err;
+  }
+}
+
+async function getAdminFeedback(limit = 200) {
+  const { rows } = await pool.query(
+    `SELECT f.id, f.job_id, f.source, f.rating, f.reason, f.comment, f.created_at, u.email
+     FROM job_feedback f JOIN users u ON u.id = f.user_id
+     ORDER BY f.created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+// ---- Ideas de nuevas funciones ----
+const FEATURE_CATEGORIES = ['Edición', 'Audio', 'Conversión', 'Exportación', 'Interfaz', 'Nueva herramienta', 'Otro'];
+const FEATURE_STATUSES = ['recibida', 'en_revision', 'planeada', 'implementada', 'descartada'];
+
+async function submitFeatureIdea(userId, { title, description, category }) {
+  const cleanTitle = String(title || '').trim().slice(0, 150);
+  if (!cleanTitle) return { ok: false, error: 'Ponele un título a tu idea.' };
+  const cleanCategory = FEATURE_CATEGORIES.includes(category) ? category : 'Otro';
+  const cleanDescription = String(description || '').trim().slice(0, 1000) || null;
+  await pool.query(
+    'INSERT INTO feature_ideas (user_id, title, description, category) VALUES ($1, $2, $3, $4)',
+    [userId, cleanTitle, cleanDescription, cleanCategory]
+  );
+  return { ok: true };
+}
+
+async function getAdminFeatureIdeas(limit = 200) {
+  const { rows } = await pool.query(
+    `SELECT i.id, i.title, i.description, i.category, i.status, i.created_at, u.email
+     FROM feature_ideas i JOIN users u ON u.id = i.user_id
+     ORDER BY i.created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+async function setFeatureIdeaStatus(ideaId, status) {
+  if (!FEATURE_STATUSES.includes(status)) return { ok: false, error: 'Estado inválido.' };
+  await pool.query('UPDATE feature_ideas SET status = $1 WHERE id = $2', [status, ideaId]);
+  return { ok: true };
 }
 
 // ---- Panel de admin ----
@@ -486,6 +714,9 @@ async function getAdminStats() {
     { rows: referralRows },
     { rows: planRows },
     { rows: pendingRows },
+    { rows: feedbackRows },
+    { rows: ideasRows },
+    { rows: rewardsRows },
   ] = await Promise.all([
     pool.query('SELECT count(*)::int AS n FROM users'),
     pool.query('SELECT count(*)::int AS n FROM users WHERE unlimited = true OR (unlimited_until IS NOT NULL AND unlimited_until > now())'),
@@ -496,9 +727,14 @@ async function getAdminStats() {
     pool.query('SELECT count(*)::int AS n FROM users WHERE referred_by IS NOT NULL'),
     pool.query("SELECT plan, count(*)::int AS n FROM users GROUP BY plan"),
     pool.query('SELECT count(*)::int AS n FROM users WHERE requested_plan IS NOT NULL'),
+    pool.query("SELECT rating, count(*)::int AS n FROM job_feedback GROUP BY rating"),
+    pool.query("SELECT count(*)::int AS n FROM feature_ideas WHERE status = 'recibida'"),
+    pool.query('SELECT count(*)::int AS n FROM users WHERE free_reward_level > 0'),
   ]);
   const planCounts = { free: 0, intermedio: 0, pro: 0 };
   planRows.forEach((r) => { planCounts[r.plan] = r.n; });
+  const feedbackCounts = { up: 0, down: 0 };
+  feedbackRows.forEach((r) => { feedbackCounts[r.rating] = r.n; });
   return {
     totalUsers: totalUsersRows[0].n,
     unlimitedUsers: unlimitedRows[0].n,
@@ -507,6 +743,9 @@ async function getAdminStats() {
     totalReferrals: referralRows[0].n,
     planCounts,
     pendingUpgrades: pendingRows[0].n,
+    feedbackCounts,
+    pendingIdeas: ideasRows[0].n,
+    usersWithFreeReward: rewardsRows[0].n,
   };
 }
 
@@ -548,14 +787,25 @@ module.exports = {
   findByValidResetToken,
   resetPassword,
   countReferrals,
-  recordVideoCompletion,
-  getBadges,
+  updateProgressionOnSuccess,
+  getProgressSummary,
+  computeLevel,
+  ACHIEVEMENTS,
+  FREE_REWARDS,
   revokePlan,
   deleteUser,
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
   cleanupExpiredHistory,
+  FEEDBACK_REASONS,
+  submitJobFeedback,
+  getAdminFeedback,
+  FEATURE_CATEGORIES,
+  FEATURE_STATUSES,
+  submitFeatureIdea,
+  getAdminFeatureIdeas,
+  setFeatureIdeaStatus,
   isAdminEmail,
   getAdminStats,
   getAdminUsers,

@@ -116,6 +116,7 @@ audioExportBtn.addEventListener('click', async () => {
   audioExportBtn.textContent = 'Subiendo...';
   audioErrorPanel.classList.add('hidden');
   audioResultPanel.classList.add('hidden');
+  document.getElementById('audioFeedbackCard').classList.add('hidden');
   audioProgressWrap.classList.remove('hidden');
   audioProgressFill.classList.add('indeterminate');
   audioProgressText.textContent = 'Subiendo video...';
@@ -198,6 +199,8 @@ function pollAudioStatus(jobId) {
         audioExportBtn.textContent = '🎧 Extraer audio';
         if (window.fireConfetti) window.fireConfetti();
         if (window.notifyVideoReady) window.notifyVideoReady('Tu audio ya está listo para descargar.');
+        if (window.initFeedbackCard) window.initFeedbackCard(document.getElementById('audioFeedbackCard'), jobId, 'audio');
+        if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
       } else if (data.status === 'cancelled') {
         stopAudioTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();

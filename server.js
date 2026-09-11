@@ -32,14 +32,22 @@ const {
   findByValidResetToken,
   resetPassword,
   countReferrals,
-  recordVideoCompletion,
-  getBadges,
+  updateProgressionOnSuccess,
+  getProgressSummary,
   revokePlan,
   deleteUser,
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
   cleanupExpiredHistory,
+  FEEDBACK_REASONS,
+  submitJobFeedback,
+  getAdminFeedback,
+  FEATURE_CATEGORIES,
+  FEATURE_STATUSES,
+  submitFeatureIdea,
+  getAdminFeatureIdeas,
+  setFeatureIdeaStatus,
   isAdminEmail,
   getAdminStats,
   getAdminUsers,
@@ -167,7 +175,6 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
     const user = await findById(req.session.user.id);
     const quota = await getQuotaStatus(req.session.user.id);
     const referrals = await countReferrals(req.session.user.id);
-    const badges = await getBadges(req.session.user.id);
     res.json({
       email: req.session.user.email,
       avatarUrl: (user && user.avatar_data_url) || null,
@@ -177,7 +184,6 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
       isAdmin: isAdminEmail(req.session.user.email),
       streak: (user && user.streak_count) || 0,
       totalVideos: (user && user.total_videos) || 0,
-      badges,
       impersonating: !!(req.session.impersonator),
       impersonatorEmail: req.session.impersonator ? req.session.impersonator.email : null,
     });
@@ -443,6 +449,87 @@ app.delete('/api/admin/users/:id', requireAuthApi, requireAdminApi, async (req, 
   }
 });
 
+// ---- Progreso, logros y recompensas ("Mi Progreso") ----
+// Todo lo que devuelve sale de la base (nivel, logros, dias activos,
+// racha, recompensa de plan gratis): no hay ningun campo de progreso que
+// este endpoint lea del cliente, asi que no hay nada que un usuario pueda
+// mandar manipulado para "adelantarse" — ver updateProgressionOnSuccess en
+// users.js, el unico lugar que escribe estos valores.
+app.get('/api/progress', requireAuthApi, async (req, res) => {
+  try {
+    const data = await getProgressSummary(req.session.user.id);
+    if (!data) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    res.json(data);
+  } catch (err) {
+    console.error('[progress]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar tu progreso.' });
+  }
+});
+
+// ---- Feedback sobre un video ya procesado ----
+app.get('/api/feedback/reasons', (req, res) => res.json({ reasons: FEEDBACK_REASONS }));
+
+app.post('/api/feedback', requireAuthApi, async (req, res) => {
+  try {
+    const { jobId, source, rating, reason, comment } = req.body || {};
+    // El jobId tiene que ser un video que de verdad termino bien para ESTE
+    // usuario (no cualquier UUID inventado): se valida contra el historial,
+    // que es lo unico que escribe el propio backend al terminar un job.
+    const item = await getHistoryItem(jobId, req.session.user.id);
+    if (!item) return res.status(404).json({ error: 'Ese video no existe o no es tuyo.' });
+    const result = await submitJobFeedback(req.session.user.id, { jobId, source, rating, reason, comment });
+    if (!result.ok) return res.status(409).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[feedback]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar tu opinión.' });
+  }
+});
+
+// ---- Ideas de nuevas funciones ----
+app.get('/api/feature-ideas/categories', (req, res) => res.json({ categories: FEATURE_CATEGORIES }));
+
+app.post('/api/feature-ideas', requireAuthApi, async (req, res) => {
+  try {
+    const { title, description, category } = req.body || {};
+    const result = await submitFeatureIdea(req.session.user.id, { title, description, category });
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[feature-idea]', err.message);
+    res.status(500).json({ error: 'No se pudo enviar tu idea.' });
+  }
+});
+
+app.get('/api/admin/feedback', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    res.json(await getAdminFeedback());
+  } catch (err) {
+    console.error('[admin/feedback]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el feedback.' });
+  }
+});
+
+app.get('/api/admin/feature-ideas', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    res.json(await getAdminFeatureIdeas());
+  } catch (err) {
+    console.error('[admin/feature-ideas]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar las ideas.' });
+  }
+});
+
+app.post('/api/admin/feature-ideas/:id/status', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    const result = await setFeatureIdeaStatus(parseInt(req.params.id, 10), req.body && req.body.status);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/feature-idea-status]', err.message);
+    res.status(500).json({ error: 'No se pudo cambiar el estado.' });
+  }
+});
+
 app.get('/api/history', requireAuthApi, async (req, res) => {
   try {
     res.json(await getVideoHistory(req.session.user.id));
@@ -487,13 +574,14 @@ function setJob(jobId, patch) {
 // Conecta los eventos de un FfmpegCommand ya armado con el ciclo de vida del
 // job (progreso, timeout de seguridad, cancelacion, limpieza de temporales).
 // Lo usan tanto /api/process como /api/edit.
-// meta: { progressFrom, userId, downloadName, source } — progressFrom es
-// para jobs con una fase previa (ej. normalizar clips en el mini editor
-// antes de este encode final), asi la barra sigue subiendo en vez de saltar
-// de vuelta a 0%; el resto es para poder guardar el resultado en el
-// historial del usuario cuando termina.
+// meta: { progressFrom, userId, downloadName, source, inputSize } —
+// progressFrom es para jobs con una fase previa (ej. normalizar clips en el
+// mini editor antes de este encode final), asi la barra sigue subiendo en
+// vez de saltar de vuelta a 0%; inputSize (opcional, solo el Optimizador la
+// manda) sirve para calcular cuanto se "ahorro" de tamaño; el resto es para
+// poder guardar el resultado en el historial del usuario cuando termina.
 function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
-  const { progressFrom = 0, userId, downloadName, source } = meta;
+  const { progressFrom = 0, userId, downloadName, source, inputSize } = meta;
   let stderrTail = [];
   let killedForTimeout = false;
   const timeoutHandle = setTimeout(() => {
@@ -532,24 +620,52 @@ function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
     })
     .on('end', () => {
       clearTimeout(timeoutHandle);
+      // Defensa extra: si por algun motivo 'end' se disparara mas de una
+      // vez para el mismo job, no volver a contar el video ni a descontar
+      // cupo dos veces (fluent-ffmpeg no deberia hacerlo, pero el costo de
+      // este chequeo es minimo y el de un doble conteo no).
+      if (jobs.get(jobId)?.status === 'done') return;
       let outputSize = 0;
       try { outputSize = fs.statSync(outputPath).size; } catch {}
-      setJob(jobId, { status: 'done', progress: 100, outputPath, outputSize });
       cleanupInputs();
-      if (userId) {
-        recordVideoHistory(userId, {
-          id: jobId,
-          title: downloadName || 'video-editado.mp4',
-          source: source || 'optimizer',
-          outputSize,
-          filePath: outputPath,
-        }).catch((err) => console.error(`[history:${jobId}]`, err.message));
-        recordVideoCompletion(userId).catch((err) => console.error(`[streak:${jobId}]`, err.message));
-        // El cupo se descuenta recien aca (job terminado con exito), no al
-        // subir el archivo: asi cancelar o que falle el proceso no gasta un
-        // uso del plan (ver requireQuota mas arriba).
-        consumeQuotaOnSuccess(userId).catch((err) => console.error(`[quota:${jobId}]`, err.message));
-      }
+
+      // OJO con el orden: el status pasa a 'done' recien DESPUES de tener
+      // resueltos los logros/recompensas nuevos, en el mismo setJob. Si se
+      // marcara 'done' antes y newAchievements se agregara despues (via un
+      // segundo setJob async), el polling del frontend podria ver 'done',
+      // dejar de preguntar, y perderse el aviso de logro desbloqueado.
+      (async () => {
+        let newAchievements = [];
+        let newReward = null;
+        if (userId) {
+          recordVideoHistory(userId, {
+            id: jobId,
+            title: downloadName || 'video-editado.mp4',
+            source: source || 'optimizer',
+            outputSize,
+            filePath: outputPath,
+          }).catch((err) => console.error(`[history:${jobId}]`, err.message));
+
+          // El cupo se descuenta recien aca (job terminado con exito), no al
+          // subir el archivo: asi cancelar o que falle el proceso no gasta
+          // un uso del plan (ver requireQuota mas arriba).
+          consumeQuotaOnSuccess(userId).catch((err) => console.error(`[quota:${jobId}]`, err.message));
+
+          // Progreso/logros/recompensas: unico lugar de todo el backend que
+          // suma un video al contador de gamificacion, disparado por el
+          // propio ffmpeg terminando bien (no por nada que mande el
+          // frontend).
+          try {
+            const bytesSaved = inputSize && outputSize && inputSize > outputSize ? inputSize - outputSize : 0;
+            const result = await updateProgressionOnSuccess(userId, { bytesSaved });
+            newAchievements = result.newAchievements;
+            newReward = result.newReward;
+          } catch (err) {
+            console.error(`[progress:${jobId}]`, err.message);
+          }
+        }
+        setJob(jobId, { status: 'done', progress: 100, outputPath, outputSize, newAchievements, newReward });
+      })();
     })
     .save(outputPath);
 
@@ -803,6 +919,7 @@ app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), a
     userId: req.session.user.id,
     downloadName,
     source: 'optimizer',
+    inputSize: req.file.size,
   });
 });
 
@@ -1035,6 +1152,8 @@ app.get('/api/status/:jobId', requireAuthApi, (req, res) => {
     progress: job.progress || 0,
     error: job.error,
     outputSize: job.outputSize || 0,
+    newAchievements: job.newAchievements || [],
+    newReward: job.newReward || null,
   });
 });
 

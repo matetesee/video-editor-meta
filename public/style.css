@@ -1365,39 +1365,131 @@ select {
   white-space: nowrap;
 }
 
-/* ---- Insignias (panel de configuración) ---- */
-.badges-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 8px;
+/* ---- Mi Progreso: nivel, estadisticas, logros y recompensas ---- */
+.progress-level-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
 }
-.badge {
+.progress-level-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.progress-level-badge { font-size: 1.05rem; font-weight: 800; color: var(--text); }
+.progress-level-pct { font-size: 0.85rem; font-weight: 700; color: var(--accent-hover); }
+.level-bar-wrap {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  overflow: hidden;
+}
+.level-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  transition: width 0.4s ease;
+}
+
+.progress-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.progress-stat-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.progress-stat-icon { font-size: 1.3rem; margin-bottom: 6px; }
+.progress-stat-value { font-size: 1.3rem; font-weight: 800; color: var(--text); }
+.progress-stat-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.achievement-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 10px 6px;
-  border-radius: 10px;
+  padding: 16px 10px;
+  border-radius: 12px;
   background: var(--input-bg);
   border: 1px solid var(--panel-border);
   text-align: center;
-  opacity: 0.4;
+  opacity: 0.45;
   filter: grayscale(1);
-  transition: opacity 0.15s, filter 0.15s;
+  transition: opacity 0.2s, filter 0.2s, transform 0.2s;
 }
-.badge.unlocked {
+.achievement-card.unlocked {
   opacity: 1;
   filter: none;
-  border-color: rgba(108, 92, 231, 0.35);
+  border-color: rgba(108, 92, 231, 0.4);
   background: rgba(108, 92, 231, 0.08);
 }
-.badge-icon { font-size: 1.4rem; }
-.badge-label {
-  font-size: 0.62rem;
-  color: var(--text-dim);
-  line-height: 1.2;
+.achievement-card.unlocked:hover { transform: translateY(-2px); }
+.achievement-icon { font-size: 1.8rem; }
+.achievement-name { font-size: 0.78rem; font-weight: 700; color: var(--text); }
+.achievement-desc { font-size: 0.65rem; color: var(--text-dim); line-height: 1.3; }
+
+.reward-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 14px;
 }
-.badge.unlocked .badge-label { color: var(--text); }
+.reward-card-max { border-color: rgba(255, 149, 0, 0.4); background: rgba(255, 149, 0, 0.06); }
+.reward-card-head { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+.reward-icon { font-size: 1.8rem; }
+.reward-title { margin: 0; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; color: var(--text-dim); }
+.reward-subtitle { margin: 2px 0 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.reward-bar-wrap {
+  height: 8px;
+  border-radius: 6px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  overflow: hidden;
+}
+.reward-bar { height: 100%; background: var(--accent); transition: width 0.4s ease; }
+
+/* ---- Tarjeta de feedback rapido despues de un resultado ---- */
+.feedback-card {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+}
+.feedback-question { margin: 0 0 10px; font-size: 0.85rem; color: var(--text-dim); }
+.feedback-actions, .feedback-reasons { display: flex; gap: 8px; flex-wrap: wrap; }
+.feedback-btn, .feedback-reason-btn {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.feedback-btn:hover, .feedback-reason-btn:hover { border-color: var(--accent); }
+.feedback-thanks { margin: 0; font-size: 0.85rem; color: var(--text); }
+.feedback-card textarea {
+  width: 100%;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+}
 
 /* ---- Banner de "estás viendo la cuenta de otra persona" (admin) ---- */
 .impersonation-banner {
