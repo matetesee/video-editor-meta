@@ -18,8 +18,9 @@ const DINO_W = 34;
 const DINO_H = 42;
 const DUCK_W = 46;
 const DUCK_H = 24;
-const BASE_SPEED = 5;
-const MAX_SPEED = 13;
+const BASE_SPEED = 3.2;
+const MAX_SPEED = 7.5;
+const FRAME_MS = 1000 / 60; // los px/frame de abajo estan calibrados a 60fps
 
 let dctx = null;
 let dinoY = GROUND_Y - DINO_H;
@@ -35,6 +36,7 @@ let dRunning = false;
 let dLoopHandle = null;
 let dInitialized = false;
 let animFrame = 0;
+let lastTimestamp = 0;
 
 function dinoThemeColors() {
   const styles = getComputedStyle(document.documentElement);
@@ -61,7 +63,7 @@ function dinoRoundedRect(x, y, w, h, r) {
 }
 
 function currentSpeed() {
-  return Math.min(MAX_SPEED, BASE_SPEED + dScore / 150);
+  return Math.min(MAX_SPEED, BASE_SPEED + dScore / 260);
 }
 
 function dinoBox() {
@@ -87,12 +89,16 @@ function spawnObstacle() {
   const speed = currentSpeed();
   const isBird = dScore > 15 && Math.random() < 0.32;
   if (isBird) {
+    // Altura calculada para que choque con el dino parado (obliga a
+    // agacharse) pero pase limpio por encima del dino agachado.
+    const birdH = 22;
+    const birdBottom = GROUND_Y - DUCK_H - 6;
     obstacles.push({
       type: 'bird',
       x: dinoCanvas.width + 10,
       w: 34,
-      h: 22,
-      y: GROUND_Y - DINO_H - 10 - 22,
+      h: birdH,
+      y: birdBottom - birdH,
     });
   } else {
     const clusters = 1 + Math.floor(Math.random() * 2);
@@ -206,17 +212,24 @@ function dinoDraw() {
   }
 }
 
-function dinoTick() {
+function dinoTick(timestamp) {
   if (!dRunning) return;
-  animFrame++;
-  const speed = currentSpeed();
+  // Escalamos todo por delta-time: sin esto, en una pantalla de 120/144Hz
+  // requestAnimationFrame llama al doble de seguido y el juego corre
+  // el doble de rapido. Con esto corre igual de "tranqui" en cualquier monitor.
+  if (!lastTimestamp) lastTimestamp = timestamp;
+  const scale = Math.min(3, (timestamp - lastTimestamp) / FRAME_MS) || 1;
+  lastTimestamp = timestamp;
+
+  animFrame += scale;
+  const speed = currentSpeed() * scale;
   distance += speed;
   dScore = Math.floor(distance / 8);
   dinoScoreEl.textContent = String(dScore);
 
   if (!onGround) {
-    dinoVY += GRAVITY;
-    dinoY += dinoVY;
+    dinoVY += GRAVITY * scale;
+    dinoY += dinoVY * scale;
     if (dinoY >= GROUND_Y - DINO_H) {
       dinoY = GROUND_Y - DINO_H;
       dinoVY = 0;
@@ -293,6 +306,7 @@ function startDinoGame() {
   resetDino();
   dinoOverlay.classList.add('hidden');
   dRunning = true;
+  lastTimestamp = 0;
   dinoDraw();
   cancelAnimationFrame(dLoopHandle);
   dLoopHandle = requestAnimationFrame(dinoTick);
