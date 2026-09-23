@@ -18,9 +18,24 @@ const DINO_W = 34;
 const DINO_H = 42;
 const DUCK_W = 46;
 const DUCK_H = 24;
-const BASE_SPEED = 3.2;
-const MAX_SPEED = 7.5;
 const FRAME_MS = 1000 / 60; // los px/frame de abajo estan calibrados a 60fps
+const NIGHT_CYCLE_SCORE = 350; // cada tantos puntos alterna dia/noche, como el original
+
+const DIFFICULTIES = {
+  easy: { base: 2.4, max: 6, ramp: 340, label: 'Fácil' },
+  medium: { base: 3.2, max: 7.5, ramp: 260, label: 'Medio' },
+  hard: { base: 4.2, max: 9.5, ramp: 200, label: 'Difícil' },
+};
+
+const NIGHT_PALETTE = {
+  sky1: '#05060a',
+  sky2: '#0d0f1a',
+  ground: '#4a4f61',
+  dino: '#eef0f6',
+  dinoDark: '#c7cad6',
+  cactus: '#4fae7c',
+  bird: '#e08a99',
+};
 
 let dctx = null;
 let dinoY = GROUND_Y - DINO_H;
@@ -37,6 +52,10 @@ let dLoopHandle = null;
 let dInitialized = false;
 let animFrame = 0;
 let lastTimestamp = 0;
+let difficulty = 'medium';
+let nightAmount = 0;
+// Colores por defecto (skin "Clasico") hasta que responda /api/dino-skins.
+let currentSkin = { key: 'classic', color: '#6c5ce7', colorDark: '#8272f0' };
 
 function dinoThemeColors() {
   const styles = getComputedStyle(document.documentElement);
@@ -63,7 +82,45 @@ function dinoRoundedRect(x, y, w, h, r) {
 }
 
 function currentSpeed() {
-  return Math.min(MAX_SPEED, BASE_SPEED + dScore / 260);
+  const d = DIFFICULTIES[difficulty] || DIFFICULTIES.medium;
+  return Math.min(d.max, d.base + dScore / d.ramp);
+}
+
+function setDifficulty(key) {
+  if (!DIFFICULTIES[key]) return;
+  difficulty = key;
+  try {
+    localStorage.setItem('dinoDifficulty', key);
+  } catch (err) {
+    // si no hay localStorage disponible, no pasa nada: solo no se recuerda
+  }
+  updateDifficultyButtons();
+}
+
+function updateDifficultyButtons() {
+  document.querySelectorAll('[data-difficulty]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.difficulty === difficulty);
+  });
+}
+
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string' || hex[0] !== '#') return null;
+  const clean = hex.slice(1);
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
+  if (full.length !== 6) return null;
+  const num = parseInt(full, 16);
+  if (Number.isNaN(num)) return null;
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function blendColor(hexA, hexB, t) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  if (!a || !b) return t < 0.5 ? hexA : hexB;
+  const r = Math.round(a[0] + (b[0] - a[0]) * t);
+  const g = Math.round(a[1] + (b[1] - a[1]) * t);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+  return `rgb(${r}, ${g}, ${bl})`;
 }
 
 function dinoBox() {
@@ -83,6 +140,7 @@ function resetDino() {
   dScore = 0;
   dinoScoreEl.textContent = '0';
   animFrame = 0;
+  nightAmount = 0;
 }
 
 function spawnObstacle() {
@@ -121,7 +179,19 @@ function overlaps(a, b) {
 
 function dinoDraw() {
   if (!dctx) return;
-  const colors = dinoThemeColors();
+  const base = dinoThemeColors();
+  const t = nightAmount;
+  const colors = {
+    sky1: blendColor(base.sky1, NIGHT_PALETTE.sky1, t),
+    sky2: blendColor(base.sky2, NIGHT_PALETTE.sky2, t),
+    ground: blendColor(base.ground, NIGHT_PALETTE.ground, t),
+    cactus: blendColor(base.cactus, NIGHT_PALETTE.cactus, t),
+    bird: blendColor(base.bird, NIGHT_PALETTE.bird, t),
+  };
+  const skinDay = currentSkin.color === 'rainbow' ? `hsl(${(animFrame * 2) % 360}, 75%, 60%)` : currentSkin.color;
+  const skinDayDark = currentSkin.colorDark === 'rainbow' ? `hsl(${(animFrame * 2 + 40) % 360}, 75%, 55%)` : currentSkin.colorDark;
+  const dinoColor = currentSkin.color === 'rainbow' ? skinDay : blendColor(skinDay, NIGHT_PALETTE.dino, t);
+  const dinoDarkColor = currentSkin.colorDark === 'rainbow' ? skinDayDark : blendColor(skinDayDark, NIGHT_PALETTE.dinoDark, t);
   const w = dinoCanvas.width;
   const h = dinoCanvas.height;
 
@@ -131,11 +201,31 @@ function dinoDraw() {
   dctx.fillStyle = skyGrad;
   dctx.fillRect(0, 0, w, h);
 
-  // Sol/luna decorativo, quieto en la esquina
-  dctx.fillStyle = colors.sun;
+  // Sol (de dia) que se desvanece en luna con crateres (de noche)
+  dctx.save();
+  dctx.globalAlpha = 1 - t;
+  dctx.fillStyle = base.sun;
   dctx.beginPath();
   dctx.arc(w - 60, 45, 26, 0, Math.PI * 2);
   dctx.fill();
+  dctx.restore();
+
+  if (t > 0.01) {
+    dctx.save();
+    dctx.globalAlpha = t;
+    dctx.fillStyle = '#eef0f6';
+    dctx.beginPath();
+    dctx.arc(w - 60, 45, 16, 0, Math.PI * 2);
+    dctx.fill();
+    dctx.fillStyle = 'rgba(0,0,0,0.15)';
+    dctx.beginPath();
+    dctx.arc(w - 66, 39, 3, 0, Math.PI * 2);
+    dctx.fill();
+    dctx.beginPath();
+    dctx.arc(w - 56, 50, 2.4, 0, Math.PI * 2);
+    dctx.fill();
+    dctx.restore();
+  }
 
   // Piso con textura de guiones que se mueven (sensacion de movimiento)
   dctx.strokeStyle = colors.ground;
@@ -183,9 +273,9 @@ function dinoDraw() {
   // Dino
   const box = dinoBox();
   dctx.save();
-  dctx.shadowColor = colors.dinoDark;
+  dctx.shadowColor = dinoDarkColor;
   dctx.shadowBlur = 5;
-  dctx.fillStyle = colors.dino;
+  dctx.fillStyle = dinoColor;
   dinoRoundedRect(box.x, box.y, box.w, box.h, 6);
   dctx.fill();
   dctx.restore();
@@ -198,7 +288,7 @@ function dinoDraw() {
 
   // Patitas animadas (solo visual, no afecta la hitbox)
   if (onGround) {
-    dctx.fillStyle = colors.dinoDark;
+    dctx.fillStyle = dinoDarkColor;
     const legFrame = Math.floor(animFrame / 6) % 2;
     if (!ducking) {
       if (legFrame === 0) {
@@ -226,6 +316,11 @@ function dinoTick(timestamp) {
   distance += speed;
   dScore = Math.floor(distance / 8);
   dinoScoreEl.textContent = String(dScore);
+
+  // Ciclo dia/noche tipo el original: alterna cada NIGHT_CYCLE_SCORE puntos,
+  // con una transicion suave en vez de un corte brusco.
+  const nightTarget = Math.floor(dScore / NIGHT_CYCLE_SCORE) % 2 === 1 ? 1 : 0;
+  nightAmount += (nightTarget - nightAmount) * Math.min(1, 0.06 * scale);
 
   if (!onGround) {
     dinoVY += GRAVITY * scale;
@@ -296,9 +391,73 @@ async function saveDinoScoreIfHigher() {
       if (data.isNewRecord && window.showToast) {
         window.showToast('🦖 ¡Nuevo récord!', `Llegaste a ${dScore} punto(s) en Dino Runner.`);
       }
+      if (data.isNewRecord) loadDinoSkins();
     }
   } catch (err) {
     // si falla el guardado, no pasa nada grave — es solo un juego
+  }
+}
+
+let knownUnlockedSkins = null;
+
+async function loadDinoSkins() {
+  const dinoSkinsEl = document.getElementById('dinoSkins');
+  if (!dinoSkinsEl) return;
+  try {
+    const res = await fetch('/api/dino-skins');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderDinoSkins(data, dinoSkinsEl);
+  } catch (err) {
+    // si falla, se queda con la skin por defecto — no bloquea el juego
+  }
+}
+
+function renderDinoSkins(data, container) {
+  const nowUnlocked = new Set(data.skins.filter((s) => s.unlocked).map((s) => s.key));
+  if (knownUnlockedSkins) {
+    const newlyUnlocked = data.skins.filter((s) => s.unlocked && !knownUnlockedSkins.has(s.key));
+    newlyUnlocked.forEach((s) => {
+      if (window.showToast) window.showToast('🦖 ¡Nueva skin desbloqueada!', `"${s.label}" ya está disponible para tu Dino.`);
+    });
+  }
+  knownUnlockedSkins = nowUnlocked;
+
+  const selected = data.skins.find((s) => s.key === data.selected) || data.skins[0];
+  if (selected) currentSkin = selected;
+
+  container.innerHTML = data.skins
+    .map((s) => {
+      const swatchColor = s.color === 'rainbow' ? 'linear-gradient(135deg,#f43f5e,#eab308,#22c55e,#3b82f6,#a855f7)' : s.color;
+      const locked = !s.unlocked;
+      return `
+        <button type="button" class="dino-skin-swatch ${s.key === data.selected ? 'selected' : ''} ${locked ? 'locked' : ''}" data-skin="${s.key}" title="${s.label}${locked ? ` — desbloquea a los ${s.unlockScore} puntos` : ''}">
+          <span class="dino-skin-color" style="background:${swatchColor};"></span>
+          ${locked ? '<span class="dino-skin-lock">🔒</span>' : ''}
+          <span class="dino-skin-label">${s.label}${locked ? `<br>${s.unlockScore}pts` : ''}</span>
+        </button>`;
+    })
+    .join('');
+
+  container.querySelectorAll('.dino-skin-swatch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('locked')) return;
+      selectDinoSkin(btn.dataset.skin);
+    });
+  });
+}
+
+async function selectDinoSkin(key) {
+  try {
+    const res = await fetch('/api/dino-skin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skin: key }),
+    });
+    if (!res.ok) return;
+    loadDinoSkins();
+  } catch (err) {
+    // si falla, se mantiene la skin actual
   }
 }
 
@@ -330,8 +489,18 @@ function handleDinoKeyup(e) {
 
 window.initDinoGame = async function initDinoGame() {
   if (!dinoCanvas) return;
+  // Igual que en la serpiente: el listener va antes que cualquier await, asi
+  // una tecla apretada apenas se entra a la pestaña no se pierde.
+  document.addEventListener('keydown', handleDinoKeydown);
+  document.addEventListener('keyup', handleDinoKeyup);
   if (!dInitialized) {
     dctx = dinoCanvas.getContext('2d');
+    try {
+      const saved = localStorage.getItem('dinoDifficulty');
+      if (saved && DIFFICULTIES[saved]) difficulty = saved;
+    } catch (err) {
+      // sin localStorage disponible, se queda en "medium"
+    }
     resetDino();
     dinoDraw();
     dinoStartBtn.addEventListener('click', startDinoGame);
@@ -345,6 +514,10 @@ window.initDinoGame = async function initDinoGame() {
         btn.addEventListener('click', dinoJump);
       }
     });
+    document.querySelectorAll('[data-difficulty]').forEach((btn) => {
+      btn.addEventListener('click', () => setDifficulty(btn.dataset.difficulty));
+    });
+    updateDifficultyButtons();
     try {
       const res = await fetch('/api/dino-score');
       if (res.ok) {
@@ -355,10 +528,9 @@ window.initDinoGame = async function initDinoGame() {
     } catch (err) {
       // sin record previo visible, no bloquea el juego
     }
+    loadDinoSkins();
     dInitialized = true;
   }
-  document.addEventListener('keydown', handleDinoKeydown);
-  document.addEventListener('keyup', handleDinoKeyup);
 };
 
 window.pauseDinoGame = function pauseDinoGame() {

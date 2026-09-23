@@ -114,6 +114,20 @@ async function initDb() {
   // "para joda", sin efecto en cuota/plan/logros).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dino_high_score INTEGER NOT NULL DEFAULT 0;`);
 
+  // Skin elegida para el Dino (ver DINO_SKINS en users.js). El desbloqueo se
+  // calcula siempre en vivo a partir de dino_high_score (o del override
+  // global de abajo) — nunca se guarda "esta desbloqueada", solo la elegida.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS selected_dino_skin TEXT NOT NULL DEFAULT 'classic';`);
+
+  // Tabla chica de configuracion global de la app (clave/valor). Hoy solo la
+  // usa el override de admin "regalar todas las skins del Dino a todos".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
   // Personalizacion (100% cosmetica, ver ACCENT_THEMES/AVATARS/AVATAR_BORDERS
   // en users.js): que desbloquea cada nivel se CALCULA siempre a partir de
   // total_videos (no se guarda "esto ya lo desbloqueo" en ningun lado,

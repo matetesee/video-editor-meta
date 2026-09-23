@@ -48,6 +48,10 @@ const {
   submitSnakeScore,
   getDinoHighScore,
   submitDinoScore,
+  getDinoSkins,
+  setDinoSkin,
+  isDinoAllSkinsUnlocked,
+  setDinoAllSkinsUnlocked,
   revokePlan,
   deleteUser,
   recordVideoHistory,
@@ -421,6 +425,25 @@ app.get('/api/admin/users', requireAuthApi, requireAdminApi, async (req, res) =>
   }
 });
 
+app.get('/api/admin/dino-settings', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    res.json({ allSkinsUnlocked: await isDinoAllSkinsUnlocked() });
+  } catch (err) {
+    console.error('[admin/dino-settings]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar la configuración.' });
+  }
+});
+
+app.post('/api/admin/dino-settings', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    await setDinoAllSkinsUnlocked(!!(req.body && req.body.allSkinsUnlocked));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/dino-settings-save]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar la configuración.' });
+  }
+});
+
 app.get('/api/admin/coupons', requireAuthApi, requireAdminApi, async (req, res) => {
   try {
     res.json(await getAdminCoupons());
@@ -540,6 +563,27 @@ app.post('/api/dino-score', requireAuthApi, async (req, res) => {
   } catch (err) {
     console.error('[dino-score-save]', err.message);
     res.status(500).json({ error: 'No se pudo guardar el récord.' });
+  }
+});
+
+app.get('/api/dino-skins', requireAuthApi, async (req, res) => {
+  try {
+    const data = await getDinoSkins(req.session.user.id);
+    res.json(data);
+  } catch (err) {
+    console.error('[dino-skins]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar las skins.' });
+  }
+});
+
+app.post('/api/dino-skin', requireAuthApi, async (req, res) => {
+  try {
+    const result = await setDinoSkin(req.session.user.id, req.body && req.body.skin);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('[dino-skin-save]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar la skin.' });
   }
 });
 

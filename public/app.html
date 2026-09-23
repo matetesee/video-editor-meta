@@ -462,6 +462,11 @@
         <p class="meta-hint" style="margin:0 0 20px;">Saltá los cactus y agachate para esquivar los pájaros. Usá la barra espaciadora / ↑ para saltar y ↓ para agacharte.</p>
 
         <div class="snake-wrap">
+          <div class="dino-difficulty-row">
+            <button type="button" class="difficulty-btn" data-difficulty="easy">Fácil</button>
+            <button type="button" class="difficulty-btn active" data-difficulty="medium">Medio</button>
+            <button type="button" class="difficulty-btn" data-difficulty="hard">Difícil</button>
+          </div>
           <div class="snake-scoreboard">
             <span>Puntos: <strong id="dinoScore">0</strong></span>
             <span>🏆 Récord: <strong id="dinoHighScore">0</strong></span>
@@ -479,6 +484,8 @@
               <button type="button" class="snake-btn dino-btn-wide" data-dino="duck">⬇ Agachar</button>
             </div>
           </div>
+          <p class="section-label" style="margin:8px 0 0;">Skins</p>
+          <div class="dino-skins" id="dinoSkins"></div>
         </div>
       </div>
     </main>

@@ -810,6 +810,63 @@ async function submitDinoScore(userId, score) {
   return { ok: true, highScore: isNewRecord ? clean : user.dino_high_score, isNewRecord };
 }
 
+// ---- Configuracion global chica (clave/valor) ----
+async function getAppSetting(key, fallback) {
+  const { rows } = await pool.query('SELECT value FROM app_settings WHERE key = $1', [key]);
+  return rows.length ? rows[0].value : fallback;
+}
+
+async function setAppSetting(key, value) {
+  await pool.query(
+    'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+    [key, value]
+  );
+}
+
+// ---- Skins del Dino (100% cosmetico, desbloqueo por mejor puntaje) ----
+const DINO_SKINS = [
+  { key: 'classic', label: 'Clásico', unlockScore: 0, color: '#6c5ce7', colorDark: '#8272f0' },
+  { key: 'ice', label: 'Glaciar', unlockScore: 0, color: '#38bdf8', colorDark: '#7dd3fc' },
+  { key: 'ember', label: 'Ascuas', unlockScore: 0, color: '#f97316', colorDark: '#fb923c' },
+  { key: 'gold', label: 'Dorado', unlockScore: 1000, color: '#eab308', colorDark: '#fde047' },
+  { key: 'shadow', label: 'Sombra', unlockScore: 3000, color: '#7c3aed', colorDark: '#a78bfa' },
+  { key: 'rainbow', label: 'Arcoíris', unlockScore: 10000, color: 'rainbow', colorDark: 'rainbow' },
+];
+
+async function isDinoAllSkinsUnlocked() {
+  return (await getAppSetting('dino_all_skins_unlocked', 'false')) === 'true';
+}
+
+async function setDinoAllSkinsUnlocked(enabled) {
+  await setAppSetting('dino_all_skins_unlocked', enabled ? 'true' : 'false');
+}
+
+async function getDinoSkins(userId) {
+  const user = await findById(userId);
+  if (!user) return null;
+  const best = user.dino_high_score || 0;
+  const allUnlocked = await isDinoAllSkinsUnlocked();
+  return {
+    selected: user.selected_dino_skin || 'classic',
+    allUnlocked,
+    skins: DINO_SKINS.map((s) => ({ ...s, unlocked: allUnlocked || best >= s.unlockScore })),
+  };
+}
+
+async function setDinoSkin(userId, skinKey) {
+  const skin = DINO_SKINS.find((s) => s.key === skinKey);
+  if (!skin) return { ok: false, error: 'Skin inválida.' };
+  const user = await findById(userId);
+  if (!user) return { ok: false, error: 'Usuario no encontrado.' };
+  const allUnlocked = await isDinoAllSkinsUnlocked();
+  const best = user.dino_high_score || 0;
+  if (!allUnlocked && best < skin.unlockScore) {
+    return { ok: false, error: 'Todavía no desbloqueaste esa skin.' };
+  }
+  await pool.query('UPDATE users SET selected_dino_skin = $1 WHERE id = $2', [skinKey, userId]);
+  return { ok: true, selected: skinKey };
+}
+
 // Todo lo que necesita la pagina "Mi Progreso": nivel, estadisticas, la
 // lista completa de logros (bloqueados incluidos, para que sean objetivos
 // visibles) y el detalle de cuanto falta para cada proxima recompensa.
@@ -1115,6 +1172,10 @@ module.exports = {
   submitSnakeScore,
   getDinoHighScore,
   submitDinoScore,
+  getDinoSkins,
+  setDinoSkin,
+  isDinoAllSkinsUnlocked,
+  setDinoAllSkinsUnlocked,
   revokePlan,
   deleteUser,
   recordVideoHistory,

@@ -263,6 +263,10 @@ function handleKeydown(e) {
 
 window.initSnakeGame = async function initSnakeGame() {
   if (!snakeCanvas) return;
+  // El listener va primero y sin esperar nada: si esto quedara despues del
+  // fetch de abajo, una tecla apretada justo al entrar a la pestaña (antes
+  // de que responda el servidor) se perdia sin que la serpiente reaccionara.
+  document.addEventListener('keydown', handleKeydown);
   if (!initialized) {
     ctx = snakeCanvas.getContext('2d');
     resetGame();
@@ -291,7 +295,6 @@ window.initSnakeGame = async function initSnakeGame() {
     }
     initialized = true;
   }
-  document.addEventListener('keydown', handleKeydown);
 };
 
 window.pauseSnakeGame = function pauseSnakeGame() {

@@ -275,8 +275,32 @@ async function loadIdeas() {
   });
 }
 
+async function loadDinoSettings() {
+  const checkbox = document.getElementById('dinoAllSkinsCheckbox');
+  if (!checkbox) return;
+  const res = await fetch('/api/admin/dino-settings');
+  const data = await res.json();
+  checkbox.checked = !!data.allSkinsUnlocked;
+  checkbox.addEventListener('change', async () => {
+    checkbox.disabled = true;
+    try {
+      await fetch('/api/admin/dino-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allSkinsUnlocked: checkbox.checked }),
+      });
+    } catch (err) {
+      alert('❌ No se pudo guardar la configuración.');
+      checkbox.checked = !checkbox.checked;
+    } finally {
+      checkbox.disabled = false;
+    }
+  });
+}
+
 loadStats();
 loadUsers();
 loadCoupons();
 loadFeedback();
 loadIdeas();
+loadDinoSettings();

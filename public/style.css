@@ -1753,3 +1753,38 @@ select {
   white-space: nowrap;
 }
 .dino-btn-wide:active { background: var(--accent); color: #fff; }
+
+.dino-difficulty-row { display: flex; gap: 6px; }
+.difficulty-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.difficulty-btn:hover { border-color: var(--accent); }
+.difficulty-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.dino-skins { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 600px; }
+.dino-skin-swatch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 70px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  cursor: pointer;
+}
+.dino-skin-swatch:hover { border-color: var(--accent); }
+.dino-skin-swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.dino-skin-swatch.locked { cursor: not-allowed; opacity: 0.6; }
+.dino-skin-color { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.2); }
+.dino-skin-lock { position: absolute; top: 6px; right: 8px; font-size: 0.75rem; }
+.dino-skin-label { font-size: 0.68rem; color: var(--text-dim); text-align: center; line-height: 1.3; }
