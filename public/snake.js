@@ -215,40 +215,47 @@ async function saveScoreIfHigher() {
   }
 }
 
+const MOVES = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
+
 function startGame() {
   resetGame();
   snakeOverlay.classList.add('hidden');
   running = true;
   draw();
   clearTimeout(loopHandle);
-  loopHandle = setTimeout(tick, currentSpeed());
+  // Pausa inicial mas larga que el resto de los ticks: le da al jugador un
+  // segundo para ubicarse antes de que la serpiente arranque a moverse.
+  loopHandle = setTimeout(tick, 800);
 }
 
 function setDirection(dir) {
-  const moves = {
-    up: { x: 0, y: -1 },
-    down: { x: 0, y: 1 },
-    left: { x: -1, y: 0 },
-    right: { x: 1, y: 0 },
-  };
-  const next = moves[dir];
+  const next = MOVES[dir];
   if (!next) return;
   // No dejar girar 180° sobre si misma (perderia al toque sin sentido).
   if (next.x === -direction.x && next.y === -direction.y) return;
   nextDirection = next;
 }
 
+const KEY_DIRS = {
+  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+  w: 'up', s: 'down', a: 'left', d: 'right',
+  W: 'up', S: 'down', A: 'left', D: 'right',
+};
+
 function handleKeydown(e) {
-  const KEY_DIRS = {
-    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
-    w: 'up', s: 'down', a: 'left', d: 'right',
-    W: 'up', S: 'down', A: 'left', D: 'right',
-  };
   const dir = KEY_DIRS[e.key];
   if (!dir) return;
   e.preventDefault();
   if (!running) {
     startGame();
+    // La primera tecla que arranca el juego tambien define hacia donde
+    // sale la serpiente (antes se perdia: siempre arrancaba a la derecha).
+    nextDirection = MOVES[dir];
     return;
   }
   setDirection(dir);
@@ -260,8 +267,16 @@ window.initSnakeGame = async function initSnakeGame() {
     ctx = snakeCanvas.getContext('2d');
     resetGame();
     draw();
-    document.querySelectorAll('.snake-btn').forEach((btn) => {
-      btn.addEventListener('click', () => setDirection(btn.dataset.dir));
+    document.querySelectorAll('.snake-btn[data-dir]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const dir = btn.dataset.dir;
+        if (!running) {
+          startGame();
+          nextDirection = MOVES[dir];
+          return;
+        }
+        setDirection(dir);
+      });
     });
     snakeStartBtn.addEventListener('click', startGame);
     try {
