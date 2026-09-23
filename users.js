@@ -767,6 +767,29 @@ async function getPersonalRecords(userId) {
   };
 }
 
+// ---- Minijuego de la serpiente ("para joda", sin efecto en cuota/plan/logros) ----
+async function getSnakeHighScore(userId) {
+  const user = await findById(userId);
+  return user ? user.snake_high_score : 0;
+}
+
+// Solo guarda si es MAYOR al record actual (nunca lo hace bajar), y con
+// limites sanos para que un numero absurdo no ensucie la base — no hace
+// falta mas anti-trampa que esto, total no desbloquea nada de valor real.
+async function submitSnakeScore(userId, score) {
+  const clean = Math.floor(Number(score));
+  if (!Number.isFinite(clean) || clean < 0 || clean > 100000) {
+    return { ok: false, error: 'Puntaje inválido.' };
+  }
+  const user = await findById(userId);
+  if (!user) return { ok: false, error: 'Usuario no encontrado.' };
+  const isNewRecord = clean > user.snake_high_score;
+  if (isNewRecord) {
+    await pool.query('UPDATE users SET snake_high_score = $1 WHERE id = $2', [clean, userId]);
+  }
+  return { ok: true, highScore: isNewRecord ? clean : user.snake_high_score, isNewRecord };
+}
+
 // Todo lo que necesita la pagina "Mi Progreso": nivel, estadisticas, la
 // lista completa de logros (bloqueados incluidos, para que sean objetivos
 // visibles) y el detalle de cuanto falta para cada proxima recompensa.
@@ -1068,6 +1091,8 @@ module.exports = {
   setDashboardLayout,
   resetDashboardLayout,
   getPersonalRecords,
+  getSnakeHighScore,
+  submitSnakeScore,
   revokePlan,
   deleteUser,
   recordVideoHistory,

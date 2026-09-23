@@ -41,6 +41,7 @@
         <button type="button" class="section-tab sidebar-item" data-section="updatesSection">📣 <span>Actualizaciones</span></button>
         <a href="/precios" class="sidebar-item sidebar-link">💳 <span>Planes</span></a>
         <button type="button" class="section-tab sidebar-item" data-section="supportSection">🛟 <span>Soporte</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="snakeSection">🐍 <span>Juego</span></button>
         <a id="adminLink" href="/admin" class="sidebar-item sidebar-link hidden">🛠️ <span>Admin</span></a>
       </nav>
 
@@ -425,6 +426,34 @@
           <p class="error hidden" id="ideaErrorMsg" style="margin-top:12px;"></p>
         </div>
       </div>
+
+      <div id="snakeSection" class="hidden">
+        <p class="section-label" style="margin-top:0;">🐍 Juego</p>
+        <h2 class="updates-title">La Serpiente</h2>
+        <p class="meta-hint" style="margin:0 0 20px;">Un clásico para descansar la vista un rato. Usá las flechas del teclado o los botones de abajo.</p>
+
+        <div class="snake-wrap">
+          <div class="snake-scoreboard">
+            <span>Puntos: <strong id="snakeScore">0</strong></span>
+            <span>🏆 Récord: <strong id="snakeHighScore">0</strong></span>
+          </div>
+          <div class="snake-canvas-wrap">
+            <canvas id="snakeCanvas" width="360" height="360"></canvas>
+            <div class="snake-overlay" id="snakeOverlay">
+              <p id="snakeOverlayText">¿Jugamos?</p>
+              <button type="button" class="btn-primary" id="snakeStartBtn">▶ Jugar</button>
+            </div>
+          </div>
+          <div class="snake-controls">
+            <button type="button" class="snake-btn snake-btn-up" data-dir="up">↑</button>
+            <div class="snake-controls-row">
+              <button type="button" class="snake-btn" data-dir="left">←</button>
+              <button type="button" class="snake-btn" data-dir="down">↓</button>
+              <button type="button" class="snake-btn" data-dir="right">→</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <footer class="fun-footer">
@@ -560,5 +589,6 @@
   <script src="editor.js"></script>
   <script src="audio.js"></script>
   <script src="updates.js"></script>
+  <script src="snake.js"></script>
 </body>
 </html>

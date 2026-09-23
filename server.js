@@ -44,6 +44,8 @@ const {
   setDashboardLayout,
   resetDashboardLayout,
   getPersonalRecords,
+  getSnakeHighScore,
+  submitSnakeScore,
   revokePlan,
   deleteUser,
   recordVideoHistory,
@@ -491,6 +493,30 @@ app.get('/api/records', requireAuthApi, async (req, res) => {
   } catch (err) {
     console.error('[records]', err.message);
     res.status(500).json({ error: 'No se pudieron cargar tus récords.' });
+  }
+});
+
+// ---- Minijuego de la serpiente (🐍, "para joda") ----
+// Sin ninguna conexion con cuota/plan/logros: es solo un puntaje guardado
+// por cuenta en vez de en localStorage, para que se vea igual en cualquier
+// dispositivo.
+app.get('/api/snake-score', requireAuthApi, async (req, res) => {
+  try {
+    res.json({ highScore: await getSnakeHighScore(req.session.user.id) });
+  } catch (err) {
+    console.error('[snake-score]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el récord.' });
+  }
+});
+
+app.post('/api/snake-score', requireAuthApi, async (req, res) => {
+  try {
+    const result = await submitSnakeScore(req.session.user.id, req.body && req.body.score);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('[snake-score-save]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar el récord.' });
   }
 });
 

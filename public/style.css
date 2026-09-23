@@ -1687,3 +1687,57 @@ select {
 :root[data-accent-theme="gold"] { --accent: #c8952e; --accent-hover: #e0aa3e; }
 :root[data-accent-theme="teal"] { --accent: #0d9488; --accent-hover: #14b8a6; }
 :root[data-accent-theme="crimson"] { --accent: #dc2b4e; --accent-hover: #ef4b6b; }
+
+/* ---- Minijuego de la serpiente ("para joda") ---- */
+.snake-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.snake-scoreboard {
+  display: flex;
+  gap: 20px;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  padding: 8px 20px;
+}
+.snake-scoreboard strong { color: var(--text); }
+.snake-canvas-wrap {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  line-height: 0;
+}
+#snakeCanvas { display: block; max-width: 100%; touch-action: none; }
+.snake-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.72);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 20px;
+}
+.snake-overlay p { margin: 0; color: #fff; font-size: 1.1rem; font-weight: 700; }
+.snake-controls { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.snake-controls-row { display: flex; gap: 6px; }
+.snake-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.snake-btn:hover { border-color: var(--accent); }
+.snake-btn:active { background: var(--accent); color: #fff; }
+
+@media (max-width: 420px) {
+  #snakeCanvas { width: 100%; height: auto; }
+}

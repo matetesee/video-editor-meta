@@ -105,6 +105,11 @@ async function initDb() {
   // "optimiza" un tamaño original).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_bytes_saved BIGINT NOT NULL DEFAULT 0;`);
 
+  // Record del minijuego de la serpiente (🐍, "para joda"). No tiene ningun
+  // efecto en cuota/plan/logros — es solo un numerito guardado por cuenta
+  // en vez de en localStorage, para que se vea igual en cualquier dispositivo.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS snake_high_score INTEGER NOT NULL DEFAULT 0;`);
+
   // Personalizacion (100% cosmetica, ver ACCENT_THEMES/AVATARS/AVATAR_BORDERS
   // en users.js): que desbloquea cada nivel se CALCULA siempre a partir de
   // total_videos (no se guarda "esto ya lo desbloqueo" en ningun lado,
