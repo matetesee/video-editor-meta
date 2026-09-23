@@ -41,7 +41,8 @@
         <button type="button" class="section-tab sidebar-item" data-section="updatesSection">📣 <span>Actualizaciones</span></button>
         <a href="/precios" class="sidebar-item sidebar-link">💳 <span>Planes</span></a>
         <button type="button" class="section-tab sidebar-item" data-section="supportSection">🛟 <span>Soporte</span></button>
-        <button type="button" class="section-tab sidebar-item" data-section="snakeSection">🐍 <span>Juego</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="snakeSection">🐍 <span>Serpiente</span></button>
+        <button type="button" class="section-tab sidebar-item" data-section="dinoSection">🦖 <span>Dino</span></button>
         <a id="adminLink" href="/admin" class="sidebar-item sidebar-link hidden">🛠️ <span>Admin</span></a>
       </nav>
 
@@ -430,7 +431,7 @@
       <div id="snakeSection" class="hidden">
         <p class="section-label" style="margin-top:0;">🐍 Juego</p>
         <h2 class="updates-title">La Serpiente</h2>
-        <p class="meta-hint" style="margin:0 0 20px;">Un clásico para descansar la vista un rato. Usá las flechas del teclado o los botones de abajo.</p>
+        <p class="meta-hint" style="margin:0 0 20px;">Un clásico para descansar la vista un rato. Usá las flechas del teclado (o WASD) o los botones de abajo.</p>
 
         <div class="snake-wrap">
           <div class="snake-scoreboard">
@@ -450,6 +451,32 @@
               <button type="button" class="snake-btn" data-dir="left">←</button>
               <button type="button" class="snake-btn" data-dir="down">↓</button>
               <button type="button" class="snake-btn" data-dir="right">→</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dinoSection" class="hidden">
+        <p class="section-label" style="margin-top:0;">🦖 Juego</p>
+        <h2 class="updates-title">Dino Runner</h2>
+        <p class="meta-hint" style="margin:0 0 20px;">Saltá los cactus y agachate para esquivar los pájaros. Usá la barra espaciadora / ↑ para saltar y ↓ para agacharte.</p>
+
+        <div class="snake-wrap">
+          <div class="snake-scoreboard">
+            <span>Puntos: <strong id="dinoScore">0</strong></span>
+            <span>🏆 Récord: <strong id="dinoHighScore">0</strong></span>
+          </div>
+          <div class="snake-canvas-wrap dino-canvas-wrap">
+            <canvas id="dinoCanvas" width="600" height="220"></canvas>
+            <div class="snake-overlay" id="dinoOverlay">
+              <p id="dinoOverlayText">¿Jugamos?</p>
+              <button type="button" class="btn-primary" id="dinoStartBtn">▶ Jugar</button>
+            </div>
+          </div>
+          <div class="snake-controls">
+            <div class="snake-controls-row">
+              <button type="button" class="snake-btn dino-btn-wide" data-dino="jump">⬆ Saltar</button>
+              <button type="button" class="snake-btn dino-btn-wide" data-dino="duck">⬇ Agachar</button>
             </div>
           </div>
         </div>
@@ -590,5 +617,6 @@
   <script src="audio.js"></script>
   <script src="updates.js"></script>
   <script src="snake.js"></script>
+  <script src="dino.js"></script>
 </body>
 </html>

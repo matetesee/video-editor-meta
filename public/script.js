@@ -595,7 +595,7 @@ document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
     document
-      .querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection')
+      .querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
       .forEach((section) => {
         section.classList.toggle('hidden', section.id !== tab.dataset.section);
       });
@@ -604,6 +604,8 @@ document.querySelectorAll('.section-tab').forEach((tab) => {
     if (tab.dataset.section === 'progressSection' && window.renderProgress) window.renderProgress();
     if (tab.dataset.section === 'snakeSection' && window.initSnakeGame) window.initSnakeGame();
     else if (window.pauseSnakeGame) window.pauseSnakeGame();
+    if (tab.dataset.section === 'dinoSection' && window.initDinoGame) window.initDinoGame();
+    else if (window.pauseDinoGame) window.pauseDinoGame();
   });
 });
 

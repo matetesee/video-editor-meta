@@ -46,6 +46,8 @@ const {
   getPersonalRecords,
   getSnakeHighScore,
   submitSnakeScore,
+  getDinoHighScore,
+  submitDinoScore,
   revokePlan,
   deleteUser,
   recordVideoHistory,
@@ -516,6 +518,27 @@ app.post('/api/snake-score', requireAuthApi, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[snake-score-save]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar el récord.' });
+  }
+});
+
+// ---- Minijuego del dinosaurio (🦖, "para joda", mismo espiritu que la serpiente) ----
+app.get('/api/dino-score', requireAuthApi, async (req, res) => {
+  try {
+    res.json({ highScore: await getDinoHighScore(req.session.user.id) });
+  } catch (err) {
+    console.error('[dino-score]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el récord.' });
+  }
+});
+
+app.post('/api/dino-score', requireAuthApi, async (req, res) => {
+  try {
+    const result = await submitDinoScore(req.session.user.id, req.body && req.body.score);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('[dino-score-save]', err.message);
     res.status(500).json({ error: 'No se pudo guardar el récord.' });
   }
 });

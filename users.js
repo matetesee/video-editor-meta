@@ -790,6 +790,26 @@ async function submitSnakeScore(userId, score) {
   return { ok: true, highScore: isNewRecord ? clean : user.snake_high_score, isNewRecord };
 }
 
+// ---- Minijuego del dinosaurio ("para joda", sin efecto en cuota/plan/logros) ----
+async function getDinoHighScore(userId) {
+  const user = await findById(userId);
+  return user ? user.dino_high_score : 0;
+}
+
+async function submitDinoScore(userId, score) {
+  const clean = Math.floor(Number(score));
+  if (!Number.isFinite(clean) || clean < 0 || clean > 1000000) {
+    return { ok: false, error: 'Puntaje inválido.' };
+  }
+  const user = await findById(userId);
+  if (!user) return { ok: false, error: 'Usuario no encontrado.' };
+  const isNewRecord = clean > user.dino_high_score;
+  if (isNewRecord) {
+    await pool.query('UPDATE users SET dino_high_score = $1 WHERE id = $2', [clean, userId]);
+  }
+  return { ok: true, highScore: isNewRecord ? clean : user.dino_high_score, isNewRecord };
+}
+
 // Todo lo que necesita la pagina "Mi Progreso": nivel, estadisticas, la
 // lista completa de logros (bloqueados incluidos, para que sean objetivos
 // visibles) y el detalle de cuanto falta para cada proxima recompensa.
@@ -1093,6 +1113,8 @@ module.exports = {
   getPersonalRecords,
   getSnakeHighScore,
   submitSnakeScore,
+  getDinoHighScore,
+  submitDinoScore,
   revokePlan,
   deleteUser,
   recordVideoHistory,

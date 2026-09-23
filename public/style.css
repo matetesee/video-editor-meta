@@ -1741,3 +1741,15 @@ select {
 @media (max-width: 420px) {
   #snakeCanvas { width: 100%; height: auto; }
 }
+
+/* ---- Minijuego del dinosaurio ("para joda") ---- */
+.dino-canvas-wrap { width: 100%; max-width: 600px; }
+#dinoCanvas { display: block; width: 100%; height: auto; max-width: 600px; touch-action: none; }
+.dino-btn-wide {
+  width: auto;
+  padding: 0 22px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dino-btn-wide:active { background: var(--accent); color: #fff; }

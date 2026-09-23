@@ -110,6 +110,10 @@ async function initDb() {
   // en vez de en localStorage, para que se vea igual en cualquier dispositivo.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS snake_high_score INTEGER NOT NULL DEFAULT 0;`);
 
+  // Record del minijuego del dinosaurio (🦖, mismo espiritu que la serpiente:
+  // "para joda", sin efecto en cuota/plan/logros).
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dino_high_score INTEGER NOT NULL DEFAULT 0;`);
+
   // Personalizacion (100% cosmetica, ver ACCENT_THEMES/AVATARS/AVATAR_BORDERS
   // en users.js): que desbloquea cada nivel se CALCULA siempre a partir de
   // total_videos (no se guarda "esto ya lo desbloqueo" en ningun lado,

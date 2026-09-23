@@ -30,11 +30,23 @@ function themeColors() {
   const styles = getComputedStyle(document.documentElement);
   return {
     bg: styles.getPropertyValue('--input-bg').trim() || '#1f2330',
+    bg2: styles.getPropertyValue('--panel').trim() || '#181b24',
     snake: styles.getPropertyValue('--accent').trim() || '#6c5ce7',
     snakeHead: styles.getPropertyValue('--accent-hover').trim() || '#8272f0',
     apple: '#e63946',
+    appleShine: '#ff8fa3',
     grid: styles.getPropertyValue('--panel-border').trim() || '#2a2e38',
   };
+}
+
+function roundedRect(ctx2, x, y, w, h, r) {
+  ctx2.beginPath();
+  ctx2.moveTo(x + r, y);
+  ctx2.arcTo(x + w, y, x + w, y + h, r);
+  ctx2.arcTo(x + w, y + h, x, y + h, r);
+  ctx2.arcTo(x, y + h, x, y, r);
+  ctx2.arcTo(x, y, x + w, y, r);
+  ctx2.closePath();
 }
 
 function resetGame() {
@@ -62,25 +74,86 @@ function placeApple() {
 function draw() {
   if (!ctx) return;
   const colors = themeColors();
-  ctx.fillStyle = colors.bg;
-  ctx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height);
+  const w = snakeCanvas.width;
+  const h = snakeCanvas.height;
 
-  // Manzana
+  // Fondo con un leve degrade para que no sea un color plano
+  const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+  bgGrad.addColorStop(0, colors.bg);
+  bgGrad.addColorStop(1, colors.bg2);
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Grilla sutil (puntitos en cada celda, no lineas duras)
+  ctx.fillStyle = colors.grid;
+  ctx.globalAlpha = 0.35;
+  for (let gx = 0; gx < GRID_COUNT; gx++) {
+    for (let gy = 0; gy < GRID_COUNT; gy++) {
+      ctx.beginPath();
+      ctx.arc(gx * GRID_SIZE + GRID_SIZE / 2, gy * GRID_SIZE + GRID_SIZE / 2, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Manzana con brillito
+  const ax = apple.x * GRID_SIZE + GRID_SIZE / 2;
+  const ay = apple.y * GRID_SIZE + GRID_SIZE / 2;
+  ctx.save();
+  ctx.shadowColor = colors.apple;
+  ctx.shadowBlur = 10;
   ctx.fillStyle = colors.apple;
   ctx.beginPath();
-  ctx.arc(
-    apple.x * GRID_SIZE + GRID_SIZE / 2,
-    apple.y * GRID_SIZE + GRID_SIZE / 2,
-    GRID_SIZE / 2 - 2,
-    0,
-    Math.PI * 2
-  );
+  ctx.arc(ax, ay, GRID_SIZE / 2 - 2, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = colors.appleShine;
+  ctx.beginPath();
+  ctx.arc(ax - 3, ay - 3, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Hojita
+  ctx.strokeStyle = '#2ecc71';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay - GRID_SIZE / 2 + 2);
+  ctx.lineTo(ax + 4, ay - GRID_SIZE / 2 - 3);
+  ctx.stroke();
 
-  // Serpiente
+  // Serpiente: segmentos redondeados con degrade del cuerpo hacia la cola
   snake.forEach((seg, i) => {
-    ctx.fillStyle = i === 0 ? colors.snakeHead : colors.snake;
-    ctx.fillRect(seg.x * GRID_SIZE + 1, seg.y * GRID_SIZE + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+    const x = seg.x * GRID_SIZE + 1;
+    const y = seg.y * GRID_SIZE + 1;
+    const size = GRID_SIZE - 2;
+    if (i === 0) {
+      ctx.save();
+      ctx.shadowColor = colors.snakeHead;
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = colors.snakeHead;
+      roundedRect(ctx, x, y, size, size, 6);
+      ctx.fill();
+      ctx.restore();
+      // Ojitos, orientados segun la direccion actual
+      ctx.fillStyle = '#fff';
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      const perpX = -direction.y;
+      const perpY = direction.x;
+      const ex1 = cx + direction.x * 3 + perpX * 3;
+      const ey1 = cy + direction.y * 3 + perpY * 3;
+      const ex2 = cx + direction.x * 3 - perpX * 3;
+      const ey2 = cy + direction.y * 3 - perpY * 3;
+      ctx.beginPath();
+      ctx.arc(ex1, ey1, 1.6, 0, Math.PI * 2);
+      ctx.arc(ex2, ey2, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      const fade = Math.max(0.55, 1 - i / snake.length);
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = colors.snake;
+      roundedRect(ctx, x, y, size, size, 5);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   });
 }
 
@@ -166,10 +239,18 @@ function setDirection(dir) {
 }
 
 function handleKeydown(e) {
-  const KEY_DIRS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  const KEY_DIRS = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', s: 'down', a: 'left', d: 'right',
+    W: 'up', S: 'down', A: 'left', D: 'right',
+  };
   const dir = KEY_DIRS[e.key];
   if (!dir) return;
   e.preventDefault();
+  if (!running) {
+    startGame();
+    return;
+  }
   setDirection(dir);
 }
 
