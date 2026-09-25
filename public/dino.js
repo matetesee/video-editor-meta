@@ -9,6 +9,8 @@ const dinoHighScoreEl = document.getElementById('dinoHighScore');
 const dinoOverlay = document.getElementById('dinoOverlay');
 const dinoOverlayText = document.getElementById('dinoOverlayText');
 const dinoStartBtn = document.getElementById('dinoStartBtn');
+const dinoPlayArea = document.getElementById('dinoPlayArea');
+const dinoFullscreenBtn = document.getElementById('dinoFullscreenBtn');
 
 const GROUND_Y = 190;
 const GRAVITY = 0.6;
@@ -54,8 +56,8 @@ let animFrame = 0;
 let lastTimestamp = 0;
 let difficulty = 'medium';
 let nightAmount = 0;
-// Colores por defecto (skin "Clasico") hasta que responda /api/dino-skins.
-let currentSkin = { key: 'classic', color: '#6c5ce7', colorDark: '#8272f0' };
+// Colores/forma por defecto (skin "Clasico") hasta que responda /api/dino-skins.
+let currentSkin = { key: 'classic', color: '#6c5ce7', colorDark: '#8272f0', shape: 'blocky' };
 
 function dinoThemeColors() {
   const styles = getComputedStyle(document.documentElement);
@@ -270,20 +272,62 @@ function dinoDraw() {
     }
   });
 
-  // Dino
+  // Dino: la silueta base es siempre el mismo rounded-rect (asi el hitbox
+  // real -que usa box.x/y/w/h- nunca cambia entre skins), pero cada "shape"
+  // agrega o ajusta detalles puramente visuales encima.
   const box = dinoBox();
+  const shape = currentSkin.shape || 'blocky';
+  const bodyRadius = shape === 'round' ? 15 : 6;
+  const bodyWidth = shape === 'raptor' && !ducking ? box.w - 6 : box.w;
+  const bodyX = shape === 'raptor' && !ducking ? box.x + 4 : box.x;
+
   dctx.save();
   dctx.shadowColor = dinoDarkColor;
   dctx.shadowBlur = 5;
   dctx.fillStyle = dinoColor;
-  dinoRoundedRect(box.x, box.y, box.w, box.h, 6);
+  dinoRoundedRect(bodyX, box.y, bodyWidth, box.h, bodyRadius);
   dctx.fill();
   dctx.restore();
 
+  if (!ducking) {
+    if (shape === 'spiky') {
+      // Placas tipo estegosaurio a lo largo del lomo.
+      dctx.fillStyle = dinoDarkColor;
+      for (let i = 0; i < 3; i++) {
+        const sx = box.x + 6 + i * 9;
+        dctx.beginPath();
+        dctx.moveTo(sx, box.y + 2);
+        dctx.lineTo(sx + 4, box.y - 7);
+        dctx.lineTo(sx + 8, box.y + 2);
+        dctx.closePath();
+        dctx.fill();
+      }
+    } else if (shape === 'longneck') {
+      // Cuello y cabecita chica tipo brontosaurio, saliendo del frente.
+      dctx.fillStyle = dinoColor;
+      dinoRoundedRect(box.x + box.w - 13, box.y - 20, 9, 24, 4);
+      dctx.fill();
+      dctx.beginPath();
+      dctx.arc(box.x + box.w - 8, box.y - 21, 6, 0, Math.PI * 2);
+      dctx.fill();
+    } else if (shape === 'raptor') {
+      // Hocico puntiagudo tipo velociraptor, en la punta del cuerpo angosto.
+      dctx.fillStyle = dinoColor;
+      dctx.beginPath();
+      dctx.moveTo(bodyX + bodyWidth, box.y + 8);
+      dctx.lineTo(bodyX + bodyWidth + 11, box.y + 13);
+      dctx.lineTo(bodyX + bodyWidth, box.y + 19);
+      dctx.closePath();
+      dctx.fill();
+    }
+  }
+
   // Ojo
+  const headX = shape === 'longneck' ? box.x + box.w - 8 : bodyX + bodyWidth - 8;
+  const headY = shape === 'longneck' ? box.y - 21 : box.y + 9;
   dctx.fillStyle = '#fff';
   dctx.beginPath();
-  dctx.arc(box.x + box.w - 8, box.y + 9, 2.4, 0, Math.PI * 2);
+  dctx.arc(headX, headY, 2.4, 0, Math.PI * 2);
   dctx.fill();
 
   // Patitas animadas (solo visual, no afecta la hitbox)
@@ -471,6 +515,17 @@ function startDinoGame() {
   dLoopHandle = requestAnimationFrame(dinoTick);
 }
 
+function toggleDinoFullscreen() {
+  if (!dinoPlayArea) return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    dinoPlayArea.requestFullscreen().catch(() => {
+      // si el navegador rechaza pantalla completa (poco comun), no pasa nada
+    });
+  }
+}
+
 function handleDinoKeydown(e) {
   if (['ArrowUp', ' ', 'Spacebar', 'w', 'W'].includes(e.key)) {
     e.preventDefault();
@@ -504,6 +559,14 @@ window.initDinoGame = async function initDinoGame() {
     resetDino();
     dinoDraw();
     dinoStartBtn.addEventListener('click', startDinoGame);
+    if (dinoFullscreenBtn) {
+      dinoFullscreenBtn.addEventListener('click', toggleDinoFullscreen);
+      document.addEventListener('fullscreenchange', () => {
+        const isFull = document.fullscreenElement === dinoPlayArea;
+        dinoFullscreenBtn.textContent = isFull ? '⤢' : '⛶';
+        dinoFullscreenBtn.title = isFull ? 'Salir de pantalla completa' : 'Pantalla completa';
+      });
+    }
     document.querySelectorAll('[data-dino]').forEach((btn) => {
       const isDuck = btn.dataset.dino === 'duck';
       if (isDuck) {

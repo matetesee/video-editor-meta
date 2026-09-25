@@ -467,21 +467,24 @@
             <button type="button" class="difficulty-btn active" data-difficulty="medium">Medio</button>
             <button type="button" class="difficulty-btn" data-difficulty="hard">Difícil</button>
           </div>
-          <div class="snake-scoreboard">
-            <span>Puntos: <strong id="dinoScore">0</strong></span>
-            <span>🏆 Récord: <strong id="dinoHighScore">0</strong></span>
-          </div>
-          <div class="snake-canvas-wrap dino-canvas-wrap">
-            <canvas id="dinoCanvas" width="600" height="220"></canvas>
-            <div class="snake-overlay" id="dinoOverlay">
-              <p id="dinoOverlayText">¿Jugamos?</p>
-              <button type="button" class="btn-primary" id="dinoStartBtn">▶ Jugar</button>
+          <div class="dino-play-area" id="dinoPlayArea">
+            <div class="snake-scoreboard">
+              <span>Puntos: <strong id="dinoScore">0</strong></span>
+              <span>🏆 Récord: <strong id="dinoHighScore">0</strong></span>
+              <button type="button" class="icon-btn" id="dinoFullscreenBtn" title="Pantalla completa">⛶</button>
             </div>
-          </div>
-          <div class="snake-controls">
-            <div class="snake-controls-row">
-              <button type="button" class="snake-btn dino-btn-wide" data-dino="jump">⬆ Saltar</button>
-              <button type="button" class="snake-btn dino-btn-wide" data-dino="duck">⬇ Agachar</button>
+            <div class="snake-canvas-wrap dino-canvas-wrap">
+              <canvas id="dinoCanvas" width="600" height="220"></canvas>
+              <div class="snake-overlay" id="dinoOverlay">
+                <p id="dinoOverlayText">¿Jugamos?</p>
+                <button type="button" class="btn-primary" id="dinoStartBtn">▶ Jugar</button>
+              </div>
+            </div>
+            <div class="snake-controls">
+              <div class="snake-controls-row">
+                <button type="button" class="snake-btn dino-btn-wide" data-dino="jump">⬆ Saltar</button>
+                <button type="button" class="snake-btn dino-btn-wide" data-dino="duck">⬇ Agachar</button>
+              </div>
             </div>
           </div>
           <p class="section-label" style="margin:8px 0 0;">Skins</p>
