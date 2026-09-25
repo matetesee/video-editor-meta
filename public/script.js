@@ -595,7 +595,7 @@ document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
     document
-      .querySelectorAll('#homeSection, #optimizerSection, #editorSection, #audioSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
+      .querySelectorAll('#homeSection, #optimizerSection, #editorSection, #audioSection, #speedSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
       .forEach((section) => {
         section.classList.toggle('hidden', section.id !== tab.dataset.section);
       });
@@ -641,6 +641,14 @@ function formatHistoryDate(iso) {
   return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+const HISTORY_SOURCE_LABELS = {
+  optimizer: 'Optimizador',
+  editor: 'Mini Editor',
+  audio: 'Extraer Audio',
+  speed: 'Velocidad',
+  gif: 'GIF Maker',
+};
+
 window.loadHistory = async function loadHistory() {
   historyList.innerHTML = '<p class="empty-hint">Cargando...</p>';
   historyEmpty.classList.add('hidden');
@@ -656,7 +664,7 @@ window.loadHistory = async function loadHistory() {
     items.forEach((item) => {
       const row = document.createElement('div');
       row.className = 'history-row' + (item.available ? '' : ' expired');
-      const sourceLabel = item.source === 'editor' ? 'Mini Editor' : 'Optimizador';
+      const sourceLabel = HISTORY_SOURCE_LABELS[item.source] || 'Optimizador';
       row.innerHTML = `
         <div class="history-info">
           <div class="history-title">${item.title}</div>

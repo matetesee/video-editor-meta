@@ -52,6 +52,13 @@
           </button>
           <button type="button" class="fav-star-btn" data-tool="audio" title="Marcar como favorita">☆</button>
         </div>
+        <div class="sidebar-nav-row">
+          <button type="button" class="section-tab sidebar-item" data-section="speedSection" data-tooltip="Velocidad">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg></span>
+            <span>Velocidad</span>
+          </button>
+          <button type="button" class="fav-star-btn" data-tool="speed" title="Marcar como favorita">☆</button>
+        </div>
         <button type="button" class="section-tab sidebar-item" data-section="historySection" data-tooltip="Historial">
           <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
           <span>Historial</span>
@@ -137,6 +144,10 @@
           <button type="button" class="home-card" data-go="audioSection">
             <span class="icon-badge icon-badge-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></span>
             <span class="home-card-title">Extraer Audio</span>
+          </button>
+          <button type="button" class="home-card" data-go="speedSection">
+            <span class="icon-badge icon-badge-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg></span>
+            <span class="home-card-title">Velocidad</span>
           </button>
           <button type="button" class="home-card" data-go="historySection">
             <span class="icon-badge icon-badge-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
@@ -433,6 +444,72 @@
         </section>
       </div>
 
+      <div id="speedSection" class="hidden">
+        <section class="panel" id="speedUploadPanel">
+          <label class="dropzone" id="speedDropzone">
+            <input type="file" id="speedFileInput" accept="video/*" hidden>
+            <span>⚡ Arrastrá un video acá (o hacé click) para cambiarle la velocidad</span>
+          </label>
+        </section>
+
+        <section class="panel hidden" id="speedEditPanel">
+          <div class="preview-wrap">
+            <video id="speedPreviewVideo" controls></video>
+          </div>
+
+          <p class="section-label">1. Velocidad</p>
+          <div class="panel meta-panel">
+            <div class="speed-preset-row">
+              <button type="button" class="speed-preset-btn" data-speed="0.25">0.25x</button>
+              <button type="button" class="speed-preset-btn" data-speed="0.5">0.5x</button>
+              <button type="button" class="speed-preset-btn" data-speed="0.75">0.75x</button>
+              <button type="button" class="speed-preset-btn active" data-speed="1">1x</button>
+              <button type="button" class="speed-preset-btn" data-speed="1.25">1.25x</button>
+              <button type="button" class="speed-preset-btn" data-speed="1.5">1.5x</button>
+              <button type="button" class="speed-preset-btn" data-speed="2">2x</button>
+              <button type="button" class="speed-preset-btn" data-speed="3">3x</button>
+              <button type="button" class="speed-preset-btn" data-speed="4">4x</button>
+            </div>
+            <label for="speedCustomInput" style="margin-top:12px;">O elegí una velocidad personalizada (0.25x a 4x)</label>
+            <input type="number" id="speedCustomInput" min="0.25" max="4" step="0.05" value="1">
+            <label style="margin-top:12px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="speedMuteCheckbox">
+              🔇 Silenciar audio
+            </label>
+            <p class="meta-hint" id="speedHint" style="margin-top:10px;">El audio se sincroniza automáticamente con la nueva velocidad.</p>
+          </div>
+
+          <p class="section-label">2. Nombre del archivo</p>
+          <div class="control-group title-group">
+            <label for="speedTitleInput">✏️ Título del video</label>
+            <input type="text" id="speedTitleInput" placeholder="Nombre con el que se va a descargar" maxlength="150">
+          </div>
+
+          <div class="actions">
+            <button id="speedExportBtn" class="btn-primary">⚡ Cambiar velocidad</button>
+            <button id="speedResetBtn" class="btn-secondary">Elegir otro video</button>
+          </div>
+
+          <div class="progress-wrap hidden" id="speedProgressWrap">
+            <div class="progress-head">
+              <span id="speedProgressText">Subiendo...</span>
+              <span id="speedElapsedText">0s</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="speedProgressFill"></div></div>
+            <button id="speedCancelBtn" class="btn-ghost-cancel">✕ Cancelar</button>
+          </div>
+
+          <div class="result hidden" id="speedResultPanel">
+            <p>✅ ¡Listo! Ya tenés tu video.</p>
+            <p class="result-meta" id="speedResultMeta"></p>
+            <a id="speedDownloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+            <div class="feedback-card hidden" id="speedFeedbackCard"></div>
+          </div>
+
+          <div class="error hidden" id="speedErrorPanel"></div>
+        </section>
+      </div>
+
       <div id="historySection" class="hidden">
         <section class="panel">
           <p class="meta-hint" style="margin-top:0;">Tus videos procesados quedan disponibles para volver a descargar durante 24 horas.</p>
@@ -712,6 +789,7 @@
   <script src="script.js"></script>
   <script src="editor.js"></script>
   <script src="audio.js"></script>
+  <script src="speed.js"></script>
   <script src="updates.js"></script>
   <script src="snake.js"></script>
   <script src="dino.js"></script>

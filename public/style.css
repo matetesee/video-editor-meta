@@ -492,7 +492,7 @@ body {
    Como el toggle es display:none <-> block (via .hidden), una animation (no
    una transition) es lo que realmente se dispara cada vez que la seccion
    vuelve a mostrarse. */
-#homeSection, #optimizerSection, #editorSection, #audioSection, #historySection,
+#homeSection, #optimizerSection, #editorSection, #audioSection, #speedSection, #historySection,
 #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection {
   animation: sectionFadeIn 0.28s ease;
 }
@@ -522,6 +522,20 @@ body {
 .home-card .icon-badge { width: 52px; height: 52px; }
 .home-card .icon-badge svg { width: 26px; height: 26px; }
 .home-card-title { font-size: 1rem; font-weight: 700; color: var(--text); text-align: center; }
+
+.speed-preset-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.speed-preset-btn {
+  padding: 8px 14px;
+  border-radius: 20px;
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.speed-preset-btn:hover { border-color: var(--accent); color: var(--text); }
+.speed-preset-btn.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: #fff; }
 @keyframes sectionFadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

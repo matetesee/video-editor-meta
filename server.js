@@ -911,11 +911,13 @@ function probeVideo(filePath) {
       if (err) return reject(err);
       const vStream = (data.streams || []).find((s) => s.codec_type === 'video');
       if (!vStream) return reject(new Error('El archivo no tiene ninguna pista de video valida.'));
+      const hasAudio = (data.streams || []).some((s) => s.codec_type === 'audio');
       resolve({
         width: vStream.width,
         height: vStream.height,
         fps: parseFps(vStream.r_frame_rate),
         durationSec: parseFloat(data.format && data.format.duration) || 0,
+        hasAudio,
       });
     });
   });
@@ -1130,6 +1132,82 @@ app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), a
     userId: req.session.user.id,
     downloadName,
     source: 'optimizer',
+    inputSize: req.file.size,
+  });
+});
+
+// Descompone cualquier factor de velocidad en una cadena de filtros "atempo"
+// (cada uno solo admite entre 0.5x y 2x) para poder sincronizar el audio con
+// velocidades como 4x o 0.25x que estan fuera de ese rango.
+function buildAtempoChain(speed) {
+  const filters = [];
+  let remaining = speed;
+  if (remaining < 0.5) {
+    while (remaining < 0.5) {
+      filters.push('atempo=0.5');
+      remaining /= 0.5;
+    }
+  } else if (remaining > 2.0) {
+    while (remaining > 2.0) {
+      filters.push('atempo=2.0');
+      remaining /= 2.0;
+    }
+  }
+  filters.push(`atempo=${remaining.toFixed(6)}`);
+  return filters.join(',');
+}
+
+// --- Speed Tool: cambia la velocidad de reproduccion (0.25x a 4x, o custom) ---
+app.post('/api/speed', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
+
+  const speed = Math.min(4, Math.max(0.25, parseFloat(req.body.speed) || 1));
+  const mute = req.body.mute === 'true' || req.body.mute === '1';
+  const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.mp4';
+
+  const jobId = randomUUID();
+  const inputPath = req.file.path;
+  const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
+
+  jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
+  res.json({ jobId });
+
+  let sourceInfo;
+  try {
+    sourceInfo = await probeVideo(inputPath);
+  } catch (err) {
+    setJob(jobId, { status: 'error', error: 'No se pudo leer el video (¿está corrupto o en un formato no soportado?).' });
+    cleanupFile(inputPath);
+    return;
+  }
+  if (jobs.get(jobId)?.status === 'cancelled') {
+    cleanupFile(inputPath);
+    return;
+  }
+
+  const videoFilter = `setpts=${(1 / speed).toFixed(6)}*PTS`;
+  const command = ffmpeg(inputPath)
+    .videoCodec('libx264')
+    .outputOptions([
+      '-crf 23',
+      '-preset veryfast',
+      '-movflags +faststart',
+      '-pix_fmt yuv420p',
+      '-threads', '2',
+      '-x264-params', 'threads=2:lookahead_threads=1:sliced_threads=0',
+    ]);
+
+  if (mute || !sourceInfo.hasAudio) {
+    command.videoFilters(videoFilter).outputOptions(['-an']);
+  } else {
+    const atempo = buildAtempoChain(speed);
+    command.outputOptions(['-filter_complex', `[0:v]${videoFilter}[v];[0:a]${atempo}[a]`, '-map', '[v]', '-map', '[a]']);
+  }
+
+  runJob(jobId, command, [inputPath], outputPath, {
+    userId: req.session.user.id,
+    downloadName,
+    source: 'speed',
     inputSize: req.file.size,
   });
 });
