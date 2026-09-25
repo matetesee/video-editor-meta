@@ -335,7 +335,14 @@ body {
   display: flex;
   flex-direction: column;
   padding: 22px 0 16px;
-  overflow: hidden;
+  /* Solo se esconde el desborde HORIZONTAL (necesario para que el texto no
+     se salga de costado mientras el ancho anima al expandir/colapsar). El
+     vertical NO se esconde: con muchas herramientas + pantallas bajas
+     (notebooks chicas), el contenido no entraba entero y no habia forma de
+     bajar para llegar al perfil/configuracion — ver overflow-y en
+     .sidebar-nav, que es la parte que hace scroll (el logo arriba y el
+     perfil abajo quedan siempre fijos, sin scrollear). */
+  overflow-x: hidden;
 }
 @media (min-width: 861px) {
   .sidebar {
@@ -400,7 +407,21 @@ body {
   box-shadow: 0 6px 16px -6px rgba(59, 130, 246, 0.6);
 }
 .sidebar-brand-text small { font-weight: 500; color: var(--text-dim); font-size: 0.7rem; }
-.sidebar-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; flex: 1; }
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-border) transparent;
+}
+.sidebar-nav::-webkit-scrollbar { width: 6px; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 3px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
 .sidebar-item {
   display: flex;
   align-items: center;
