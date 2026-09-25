@@ -317,15 +317,21 @@ body {
 .login-card {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 36px 32px;
   width: 100%;
   max-width: 380px;
+  box-shadow: 0 24px 60px -24px rgba(59, 130, 246, 0.35);
 }
 .login-title {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
+  font-weight: 800;
   text-align: center;
   margin: 0 0 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .login-sub {
   text-align: center;
@@ -405,7 +411,7 @@ body {
   cursor: pointer;
 }
 .login-tab.active {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #fff;
 }
 
