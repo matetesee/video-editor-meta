@@ -30,18 +30,26 @@
 
 * { box-sizing: border-box; }
 
+html {
+  background: var(--bg);
+}
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   min-height: 100vh;
 }
 
 /* Brillo atmosferico de fondo tipo Impultienda: un par de manchas de color
    bien tenues y fijas, nada mas — el contenido va siempre por encima. Solo
-   en tema oscuro (en claro, un glow asi ensucia mas de lo que suma). */
-:root:not([data-theme='light']) body {
+   en tema oscuro (en claro, un glow asi ensucia mas de lo que suma).
+   Importante: va en <html>, no en <body> — puesto en body con
+   background-attachment:fixed, Chrome deja de pintar el fondo despues del
+   primer scroll (bug conocido) y queda todo negro debajo del primer
+   viewport. Por eso ademas el <body> de arriba queda transparent: si tuviera
+   su propio color solido taparia este gradiente de html.  */
+:root:not([data-theme='light']) {
   background:
     radial-gradient(ellipse 900px 600px at 85% -10%, rgba(59, 130, 246, 0.16), transparent 60%),
     radial-gradient(ellipse 700px 500px at -10% 40%, rgba(139, 92, 246, 0.12), transparent 60%),
