@@ -248,16 +248,23 @@ function setDirection(dir) {
 
 // Primer movimiento elegido por el jugador: recien ahi arranca el loop de
 // ticks. Antes de esto la serpiente no se mueve ni un pixel.
+//
+// BUG REAL que estaba ahi desde el principio: el cuerpo arranca en horizontal
+// mirando a la derecha (los 3 segmentos iniciales ocupan x=7,8,9 en la misma
+// fila). Si el PRIMER movimiento elegido era "izquierda" (el opuesto exacto),
+// este codigo lo dejaba pasar sin chequear nada — la cabeza chocaba contra su
+// propio segundo segmento en el primerisimo tick, y el jugador veia "toco la
+// flecha y se muere al toque" pase lo que pase. El chequeo anti-reversa de
+// setDirection() tiene que aplicar SIEMPRE, incluso en el primer movimiento.
 function beginMovement(dir) {
   const next = MOVES[dir];
   if (!next) return;
+  if (next.x === -direction.x && next.y === -direction.y) return;
+  nextDirection = next;
   if (awaitingInput) {
     awaitingInput = false;
-    nextDirection = next;
     clearTimeout(loopHandle);
     loopHandle = setTimeout(tick, currentSpeed());
-  } else {
-    setDirection(dir);
   }
 }
 
