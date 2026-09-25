@@ -25,6 +25,7 @@ let highScore = 0;
 let loopHandle = null;
 let running = false;
 let initialized = false;
+let awaitingInput = false;
 
 function themeColors() {
   const styles = getComputedStyle(document.documentElement);
@@ -226,11 +227,13 @@ function startGame() {
   resetGame();
   snakeOverlay.classList.add('hidden');
   running = true;
-  draw();
+  // La serpiente arranca QUIETA (sin ir para ningun lado sola) hasta que el
+  // jugador elige una direccion — antes arrancaba derecho automaticamente
+  // apenas se apretaba "Jugar" y se comia la pared si no reaccionabas a
+  // tiempo. Ahora no hay tick programado todavia: lo dispara beginMovement().
+  awaitingInput = true;
   clearTimeout(loopHandle);
-  // Pausa inicial mas larga que el resto de los ticks: le da al jugador un
-  // segundo para ubicarse antes de que la serpiente arranque a moverse.
-  loopHandle = setTimeout(tick, 800);
+  draw();
 }
 
 function setDirection(dir) {
@@ -239,6 +242,21 @@ function setDirection(dir) {
   // No dejar girar 180° sobre si misma (perderia al toque sin sentido).
   if (next.x === -direction.x && next.y === -direction.y) return;
   nextDirection = next;
+}
+
+// Primer movimiento elegido por el jugador: recien ahi arranca el loop de
+// ticks. Antes de esto la serpiente no se mueve ni un pixel.
+function beginMovement(dir) {
+  const next = MOVES[dir];
+  if (!next) return;
+  if (awaitingInput) {
+    awaitingInput = false;
+    nextDirection = next;
+    clearTimeout(loopHandle);
+    loopHandle = setTimeout(tick, currentSpeed());
+  } else {
+    setDirection(dir);
+  }
 }
 
 const KEY_DIRS = {
@@ -251,14 +269,8 @@ function handleKeydown(e) {
   const dir = KEY_DIRS[e.key];
   if (!dir) return;
   e.preventDefault();
-  if (!running) {
-    startGame();
-    // La primera tecla que arranca el juego tambien define hacia donde
-    // sale la serpiente (antes se perdia: siempre arrancaba a la derecha).
-    nextDirection = MOVES[dir];
-    return;
-  }
-  setDirection(dir);
+  if (!running) startGame();
+  beginMovement(dir);
 }
 
 window.initSnakeGame = async function initSnakeGame() {
@@ -273,13 +285,8 @@ window.initSnakeGame = async function initSnakeGame() {
     draw();
     document.querySelectorAll('.snake-btn[data-dir]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const dir = btn.dataset.dir;
-        if (!running) {
-          startGame();
-          nextDirection = MOVES[dir];
-          return;
-        }
-        setDirection(dir);
+        if (!running) startGame();
+        beginMovement(btn.dataset.dir);
       });
     });
     snakeStartBtn.addEventListener('click', startGame);
