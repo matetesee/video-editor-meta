@@ -67,6 +67,9 @@ const {
   getAdminFeatureIdeas,
   setFeatureIdeaStatus,
   isAdminEmail,
+  getExtraAdmins,
+  addAdminEmail,
+  removeAdminEmail,
   getAdminStats,
   getAdminUsers,
   getAdminCoupons,
@@ -200,7 +203,7 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
       quota,
       referralCode: user && user.referral_code,
       referrals,
-      isAdmin: isAdminEmail(req.session.user.email),
+      isAdmin: await isAdminEmail(req.session.user.email),
       streak: (user && user.streak_count) || 0,
       totalVideos: (user && user.total_videos) || 0,
       badges: user ? computeBadges(user) : null,
@@ -484,7 +487,7 @@ app.delete('/api/admin/users/:id', requireAuthApi, requireAdminApi, async (req, 
     }
     const target = await findById(targetId);
     if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
-    if (isAdminEmail(target.email)) {
+    if (await isAdminEmail(target.email)) {
       return res.status(400).json({ error: 'No se puede eliminar la cuenta de administrador.' });
     }
     await deleteUser(targetId, cleanupFile);
@@ -492,6 +495,41 @@ app.delete('/api/admin/users/:id', requireAuthApi, requireAdminApi, async (req, 
   } catch (err) {
     console.error('[admin/delete-user]', err.message);
     res.status(500).json({ error: 'No se pudo eliminar la cuenta.' });
+  }
+});
+
+// ---- Administradores extra (socios a los que se les da acceso al panel) ----
+// El dueño (ADMIN_EMAIL en users.js) es fijo y no aparece en esta lista, asi
+// que nunca se puede sacar desde aca por error.
+app.get('/api/admin/admins', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    const extraAdmins = await getExtraAdmins();
+    res.json({ extraAdmins });
+  } catch (err) {
+    console.error('[admin/admins/list]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar la lista de administradores.' });
+  }
+});
+
+app.post('/api/admin/admins', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    const email = (req.body && req.body.email) || '';
+    const result = await addAdminEmail(email);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/admins/add]', err.message);
+    res.status(500).json({ error: 'No se pudo agregar el administrador.' });
+  }
+});
+
+app.delete('/api/admin/admins/:email', requireAuthApi, requireAdminApi, async (req, res) => {
+  try {
+    await removeAdminEmail(decodeURIComponent(req.params.email));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/admins/remove]', err.message);
+    res.status(500).json({ error: 'No se pudo quitar el administrador.' });
   }
 });
 

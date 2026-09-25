@@ -13,15 +13,17 @@ function requireAuthApi(req, res, next) {
   return res.status(401).json({ error: 'No autenticado. Iniciá sesión de nuevo.' });
 }
 
-// Solo para la cuenta admin (matetesee@gmail.com, ver ADMIN_EMAIL en
-// users.js). Se asume que ya paso por requireAuthPage/requireAuthApi antes.
-function requireAdminPage(req, res, next) {
-  if (req.session && req.session.user && isAdminEmail(req.session.user.email)) return next();
+// Para la cuenta admin dueña (ADMIN_EMAIL en users.js) o cualquier admin
+// extra agregado desde el panel. isAdminEmail es async (chequea la lista de
+// admins extra en la base), asi que estos middlewares tienen que await-earlo.
+// Se asume que ya paso por requireAuthPage/requireAuthApi antes.
+async function requireAdminPage(req, res, next) {
+  if (req.session && req.session.user && (await isAdminEmail(req.session.user.email))) return next();
   return res.redirect('/');
 }
 
-function requireAdminApi(req, res, next) {
-  if (req.session && req.session.user && isAdminEmail(req.session.user.email)) return next();
+async function requireAdminApi(req, res, next) {
+  if (req.session && req.session.user && (await isAdminEmail(req.session.user.email))) return next();
   return res.status(403).json({ error: 'No autorizado.' });
 }
 

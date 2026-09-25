@@ -298,9 +298,75 @@ async function loadDinoSettings() {
   });
 }
 
+async function loadAdmins() {
+  const body = document.getElementById('adminsBody');
+  if (!body) return;
+  const res = await fetch('/api/admin/admins');
+  const data = await res.json();
+  const extraAdmins = data.extraAdmins || [];
+  if (extraAdmins.length === 0) {
+    body.innerHTML = '<tr><td colspan="2" style="opacity:0.6;">Todavía no agregaste ningún administrador extra.</td></tr>';
+  } else {
+    body.innerHTML = extraAdmins
+      .map(
+        (email) => `
+      <tr>
+        <td>${email}</td>
+        <td><button type="button" class="btn-danger remove-admin-btn" data-email="${email}">🗑️ Quitar</button></td>
+      </tr>`
+      )
+      .join('');
+  }
+  body.querySelectorAll('.remove-admin-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`¿Quitarle el acceso de administrador a ${btn.dataset.email}?`)) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch(`/api/admin/admins/${encodeURIComponent(btn.dataset.email)}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'No se pudo quitar el administrador.');
+        loadAdmins();
+      } catch (err) {
+        alert('❌ ' + err.message);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function wireAddAdminForm() {
+  const form = document.getElementById('addAdminForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('addAdminEmail');
+    const email = input.value.trim();
+    if (!email) return;
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/admin/admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo agregar el administrador.');
+      input.value = '';
+      loadAdmins();
+    } catch (err) {
+      alert('❌ ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 loadStats();
 loadUsers();
 loadCoupons();
 loadFeedback();
 loadIdeas();
 loadDinoSettings();
+loadAdmins();
+wireAddAdminForm();

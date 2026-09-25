@@ -14,8 +14,51 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
-function isAdminEmail(email) {
-  return normalizeEmail(email) === ADMIN_EMAIL;
+// El ADMIN_EMAIL de arriba es el "dueño" fijo (nunca se puede sacar desde la
+// UI, es el que esta hardcodeado en el codigo — asi nadie se puede quedar
+// afuera del panel por error). Los administradores EXTRA que se agregan
+// desde el panel (ver getExtraAdmins/addAdminEmail/removeAdminEmail) se
+// guardan en app_settings como una lista de emails en JSON, reusando la
+// misma tablita chica de configuracion que ya existia para el toggle de
+// skins del Dino — no hace falta una tabla nueva para esto.
+async function getExtraAdmins() {
+  const raw = await getAppSetting('extra_admin_emails', '[]');
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+async function isAdminEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (normalized === ADMIN_EMAIL) return true;
+  const extra = await getExtraAdmins();
+  return extra.includes(normalized);
+}
+
+// Solo se puede nombrar admin a una cuenta que YA existe (evita tipeos que
+// "otorguen" admin a un email que en realidad no es de nadie todavia).
+async function addAdminEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return { ok: false, error: 'Email invalido.' };
+  if (normalized === ADMIN_EMAIL) return { ok: false, error: 'Esa cuenta ya es admin (dueño).' };
+  const user = await findByEmail(normalized);
+  if (!user) return { ok: false, error: 'No existe ninguna cuenta registrada con ese email.' };
+  const extra = await getExtraAdmins();
+  if (extra.includes(normalized)) return { ok: false, error: 'Esa cuenta ya es admin.' };
+  extra.push(normalized);
+  await setAppSetting('extra_admin_emails', JSON.stringify(extra));
+  return { ok: true };
+}
+
+async function removeAdminEmail(email) {
+  const normalized = normalizeEmail(email);
+  const extra = await getExtraAdmins();
+  const next = extra.filter((e) => e !== normalized);
+  await setAppSetting('extra_admin_emails', JSON.stringify(next));
+  return { ok: true };
 }
 
 async function findByEmail(email) {
@@ -1196,6 +1239,9 @@ module.exports = {
   getAdminFeatureIdeas,
   setFeatureIdeaStatus,
   isAdminEmail,
+  getExtraAdmins,
+  addAdminEmail,
+  removeAdminEmail,
   getAdminStats,
   getAdminUsers,
   getAdminCoupons,

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel de Admin - Editor de Video de Dematiu</title>
 <link rel="stylesheet" href="style.css">
-<script src="theme.js?v=4"></script>
+<script src="theme.js?v=5"></script>
 </head>
 <body>
   <div class="app admin-app">
@@ -76,6 +76,26 @@
       </table>
     </div>
 
+    <p class="section-label">Administradores</p>
+    <div class="panel meta-panel" style="margin-bottom:24px;">
+      <p class="meta-hint" style="margin-top:0;">El dueño de la cuenta siempre tiene acceso. Acá podés darle acceso al panel de admin a otras cuentas (por ejemplo, un socio) — la cuenta ya tiene que estar registrada en la app.</p>
+      <form id="addAdminForm" style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+        <input type="email" id="addAdminEmail" placeholder="email@ejemplo.com" required style="flex:1; min-width:220px;">
+        <button type="submit" class="btn-primary">Dar admin</button>
+      </form>
+      <div class="table-wrap">
+        <table id="adminsTable">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="adminsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <p class="section-label">Minijuego Dino 🦖</p>
     <div class="panel meta-panel" style="margin-bottom:24px;">
       <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
@@ -102,7 +122,7 @@
     </div>
   </div>
 
-  <script src="admin.js?v=4"></script>
-  <script src="spotlight.js?v=4"></script>
+  <script src="admin.js?v=5"></script>
+  <script src="spotlight.js?v=5"></script>
 </body>
 </html>
