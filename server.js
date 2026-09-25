@@ -399,8 +399,12 @@ app.post('/api/reset-password', async (req, res) => {
   }
 });
 
-app.get('/', requireAuthPage, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'app.html'));
+// Sin sesion: landing publica (marketing). Con sesion: la app de una.
+app.get('/', (req, res) => {
+  if (req.session && req.session.user) {
+    return res.sendFile(path.join(__dirname, 'public', 'app.html'));
+  }
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
 });
 
 app.get('/admin', requireAuthPage, requireAdminPage, (req, res) => {

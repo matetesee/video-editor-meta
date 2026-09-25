@@ -56,6 +56,88 @@ body {
   color: transparent;
 }
 
+/* Linterna que sigue al mouse (ver spotlight.js). Solo en tema oscuro: en
+   claro un brillo asi encima del fondo blanco no se nota o directamente
+   ensucia. */
+#cursorGlow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(650px circle at var(--gx, 50%) var(--gy, 50%), rgba(59, 130, 246, 0.12), transparent 60%);
+}
+:root[data-theme='light'] #cursorGlow { display: none; }
+
+/* ---- Icono en badge redondeado (tarjetas de features) ---- */
+.icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.icon-badge-blue { background: rgba(59, 130, 246, 0.15); }
+.icon-badge-violet { background: rgba(139, 92, 246, 0.15); }
+.icon-badge-green { background: rgba(46, 204, 113, 0.15); }
+.icon-badge-orange { background: rgba(249, 115, 22, 0.15); }
+
+/* ---- Landing publica (pre-login) ---- */
+.landing-page { position: relative; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 0;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+.landing-nav-links { display: flex; gap: 26px; }
+.landing-nav-links a { color: var(--text-dim); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+.landing-nav-links a:hover { color: var(--text); }
+.landing-nav-cta { display: flex; gap: 10px; align-items: center; }
+.landing-nav-cta .btn-primary, .landing-nav-cta .btn-secondary { padding: 9px 18px; font-size: 0.88rem; }
+
+.landing-hero {
+  max-width: 780px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 50px 0 30px;
+  position: relative;
+  z-index: 1;
+}
+.landing-hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.18; margin: 14px 0; }
+.landing-sub { color: var(--text-dim); font-size: 1.05rem; max-width: 620px; margin: 0 auto 30px; line-height: 1.5; }
+.landing-hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+.landing-features { max-width: 1000px; margin: 50px auto 0; padding: 0 0 20px; position: relative; z-index: 1; }
+.landing-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 26px;
+}
+.landing-feature-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 22px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.landing-feature-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.landing-feature-card h3 { margin: 14px 0 6px; font-size: 1.02rem; }
+.landing-feature-card p { margin: 0; color: var(--text-dim); font-size: 0.87rem; line-height: 1.55; }
+
+.landing-footer { text-align: center; padding: 40px 0 60px; color: var(--text-dim); font-size: 0.85rem; }
+.landing-footer a { color: var(--accent-hover); text-decoration: none; }
+
+@media (max-width: 640px) {
+  .landing-nav-links { display: none; }
+}
+
 .app {
   max-width: 720px;
   margin: 0 auto;
@@ -756,8 +838,8 @@ select {
 
 .btn-primary, .btn-secondary {
   border: none;
-  border-radius: 12px;
-  padding: 13px 22px;
+  border-radius: 999px;
+  padding: 13px 24px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -783,7 +865,7 @@ select {
 .btn-secondary:hover { color: var(--text); border-color: var(--accent); }
 .btn-danger {
   border: 1px solid rgba(255, 92, 92, 0.4);
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 13px 22px;
   font-size: 1rem;
   font-weight: 600;

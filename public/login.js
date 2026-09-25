@@ -37,9 +37,13 @@ loginTabs.forEach((btn) => btn.addEventListener('click', () => setTab(btn.datase
 
 // Si vino de un link de invitacion (?ref=CODIGO), precarga el codigo y
 // abre directo la pestaña de registro para no hacerle buscar nada.
-const refCode = new URLSearchParams(window.location.search).get('ref');
+const urlParams = new URLSearchParams(window.location.search);
+const refCode = urlParams.get('ref');
 if (refCode) {
   document.getElementById('registerReferral').value = refCode;
+  setTab('register');
+} else if (urlParams.get('tab') === 'register') {
+  // Viene del boton "Registrarse" de la landing publica.
   setTab('register');
 }
 
