@@ -696,6 +696,7 @@ const TOOLS = [
   { key: 'optimizer', icon: '🎯', name: 'Optimizador Meta', section: 'optimizerSection' },
   { key: 'editor', icon: '✂️', name: 'Mini Editor', section: 'editorSection' },
   { key: 'audio', icon: '🎧', name: 'Extraer Audio', section: 'audioSection' },
+  { key: 'gif', icon: '🖼️', name: 'GIF Maker', section: 'gifSection' },
   { key: 'speed', icon: '⚡', name: 'Velocidad', section: 'speedSection' },
 ];
 

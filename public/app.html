@@ -53,9 +53,18 @@
           <button type="button" class="fav-star-btn" data-tool="audio" title="Marcar como favorita">☆</button>
         </div>
         <div class="sidebar-nav-row">
+          <button type="button" class="section-tab sidebar-item" data-section="gifSection" data-tooltip="GIF Maker">
+            <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M7 9v6M11 9v6M11 12h2M17 9a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v-3"/></svg></span>
+            <span>GIF Maker</span>
+            <span class="nav-badge nav-badge-new">Nuevo</span>
+          </button>
+          <button type="button" class="fav-star-btn" data-tool="gif" title="Marcar como favorita">☆</button>
+        </div>
+        <div class="sidebar-nav-row">
           <button type="button" class="section-tab sidebar-item" data-section="speedSection" data-tooltip="Velocidad">
             <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg></span>
             <span>Velocidad</span>
+            <span class="nav-badge nav-badge-new">Nuevo</span>
           </button>
           <button type="button" class="fav-star-btn" data-tool="speed" title="Marcar como favorita">☆</button>
         </div>
@@ -144,6 +153,10 @@
           <button type="button" class="home-card" data-go="audioSection">
             <span class="icon-badge icon-badge-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></span>
             <span class="home-card-title">Extraer Audio</span>
+          </button>
+          <button type="button" class="home-card" data-go="gifSection">
+            <span class="icon-badge icon-badge-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M7 9v6M11 9v6M11 12h2M17 9a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v-3"/></svg></span>
+            <span class="home-card-title">GIF Maker</span>
           </button>
           <button type="button" class="home-card" data-go="speedSection">
             <span class="icon-badge icon-badge-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg></span>
@@ -510,6 +523,94 @@
         </section>
       </div>
 
+      <div id="gifSection" class="hidden">
+        <section class="panel" id="gifUploadPanel">
+          <label class="dropzone" id="gifDropzone">
+            <input type="file" id="gifFileInput" accept="video/*" hidden>
+            <span>🖼️ Arrastrá un video acá (o hacé click) para convertirlo en GIF</span>
+          </label>
+        </section>
+
+        <section class="panel hidden" id="gifEditPanel">
+          <div class="preview-wrap">
+            <video id="gifPreviewVideo" controls></video>
+          </div>
+
+          <p class="section-label">1. Elegí el fragmento</p>
+          <div class="panel meta-panel">
+            <div class="gif-trim-row">
+              <div class="control-group">
+                <label for="gifStartInput">Inicio (segundos)</label>
+                <input type="number" id="gifStartInput" min="0" step="0.1" value="0">
+                <button type="button" class="btn-secondary gif-use-current-btn" id="gifUseStartBtn">Usar tiempo actual</button>
+              </div>
+              <div class="control-group">
+                <label for="gifEndInput">Fin (segundos)</label>
+                <input type="number" id="gifEndInput" min="0.2" step="0.1" value="3">
+                <button type="button" class="btn-secondary gif-use-current-btn" id="gifUseEndBtn">Usar tiempo actual</button>
+              </div>
+            </div>
+            <p class="meta-hint" id="gifDurationHint" style="margin-top:8px;">Máximo 15 segundos por GIF.</p>
+          </div>
+
+          <p class="section-label">2. Opciones</p>
+          <div class="panel meta-panel">
+            <label for="gifFpsSelect">Velocidad (FPS)</label>
+            <select id="gifFpsSelect">
+              <option value="5">5 fps (más liviano)</option>
+              <option value="10" selected>10 fps (recomendado)</option>
+              <option value="15">15 fps</option>
+              <option value="20">20 fps</option>
+              <option value="24">24 fps</option>
+            </select>
+            <label for="gifWidthSelect" style="margin-top:10px;">Resolución (ancho)</label>
+            <select id="gifWidthSelect">
+              <option value="240">240px</option>
+              <option value="320">320px</option>
+              <option value="480" selected>480px (recomendado)</option>
+              <option value="640">640px</option>
+              <option value="720">720px</option>
+            </select>
+            <label for="gifQualitySelect" style="margin-top:10px;">Calidad de color</label>
+            <select id="gifQualitySelect">
+              <option value="high">Alta (más pesado)</option>
+              <option value="medium" selected>Media</option>
+              <option value="low">Baja (más liviano)</option>
+            </select>
+          </div>
+
+          <p class="section-label">3. Nombre del archivo</p>
+          <div class="control-group title-group">
+            <label for="gifTitleInput">✏️ Título del GIF</label>
+            <input type="text" id="gifTitleInput" placeholder="Nombre con el que se va a descargar" maxlength="150">
+          </div>
+
+          <div class="actions">
+            <button id="gifExportBtn" class="btn-primary">🖼️ Crear GIF</button>
+            <button id="gifResetBtn" class="btn-secondary">Elegir otro video</button>
+          </div>
+
+          <div class="progress-wrap hidden" id="gifProgressWrap">
+            <div class="progress-head">
+              <span id="gifProgressText">Subiendo...</span>
+              <span id="gifElapsedText">0s</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="gifProgressFill"></div></div>
+            <button id="gifCancelBtn" class="btn-ghost-cancel">✕ Cancelar</button>
+          </div>
+
+          <div class="result hidden" id="gifResultPanel">
+            <p>✅ ¡Listo! Ya tenés tu GIF.</p>
+            <img id="gifResultPreview" alt="GIF resultado" style="max-width:100%; border-radius:12px; margin-bottom:10px;">
+            <p class="result-meta" id="gifResultMeta"></p>
+            <a id="gifDownloadLink" class="btn-primary" download>⬇️ Descargar GIF</a>
+            <div class="feedback-card hidden" id="gifFeedbackCard"></div>
+          </div>
+
+          <div class="error hidden" id="gifErrorPanel"></div>
+        </section>
+      </div>
+
       <div id="historySection" class="hidden">
         <section class="panel">
           <p class="meta-hint" style="margin-top:0;">Tus videos procesados quedan disponibles para volver a descargar durante 24 horas.</p>
@@ -789,6 +890,7 @@
   <script src="script.js"></script>
   <script src="editor.js"></script>
   <script src="audio.js"></script>
+  <script src="gif.js"></script>
   <script src="speed.js"></script>
   <script src="updates.js"></script>
   <script src="snake.js"></script>

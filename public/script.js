@@ -595,7 +595,7 @@ document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
     document
-      .querySelectorAll('#homeSection, #optimizerSection, #editorSection, #audioSection, #speedSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
+      .querySelectorAll('#homeSection, #optimizerSection, #editorSection, #audioSection, #gifSection, #speedSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
       .forEach((section) => {
         section.classList.toggle('hidden', section.id !== tab.dataset.section);
       });

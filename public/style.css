@@ -492,7 +492,7 @@ body {
    Como el toggle es display:none <-> block (via .hidden), una animation (no
    una transition) es lo que realmente se dispara cada vez que la seccion
    vuelve a mostrarse. */
-#homeSection, #optimizerSection, #editorSection, #audioSection, #speedSection, #historySection,
+#homeSection, #optimizerSection, #editorSection, #audioSection, #gifSection, #speedSection, #historySection,
 #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection {
   animation: sectionFadeIn 0.28s ease;
 }
@@ -536,6 +536,25 @@ body {
 }
 .speed-preset-btn:hover { border-color: var(--accent); color: var(--text); }
 .speed-preset-btn.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: #fff; }
+
+.nav-badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.nav-badge-new { background: rgba(46, 204, 113, 0.18); color: var(--success); }
+.nav-badge-beta { background: rgba(139, 92, 246, 0.18); color: var(--accent-2); }
+.nav-badge-pro { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+.sidebar:not(.expanded):not(:hover) .nav-badge { display: none; }
+
+.gif-trim-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.gif-trim-row .control-group { flex: 1; min-width: 160px; }
+.gif-use-current-btn { margin-top: 6px; padding: 6px 12px; font-size: 0.78rem; }
 @keyframes sectionFadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

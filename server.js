@@ -1212,6 +1212,67 @@ app.post('/api/speed', requireAuthApi, requireQuota, upload.single('video'), asy
   });
 });
 
+const GIF_QUALITY = {
+  high: { maxColors: 256, dither: 'bayer:bayer_scale=1' },
+  medium: { maxColors: 128, dither: 'bayer:bayer_scale=3' },
+  low: { maxColors: 64, dither: 'bayer:bayer_scale=5' },
+};
+
+// --- GIF Maker: recorta un fragmento del video y lo exporta como GIF ---
+app.post('/api/gif', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
+
+  const fps = Math.min(30, Math.max(5, parseInt(req.body.fps, 10) || 10));
+  const width = Math.min(720, Math.max(120, parseInt(req.body.width, 10) || 480));
+  const quality = GIF_QUALITY[req.body.quality] || GIF_QUALITY.medium;
+  const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.gif';
+
+  const jobId = randomUUID();
+  const inputPath = req.file.path;
+  const outputPath = path.join(TMP_DIR, `${jobId}.gif`);
+
+  jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
+  res.json({ jobId });
+
+  let sourceInfo;
+  try {
+    sourceInfo = await probeVideo(inputPath);
+  } catch (err) {
+    setJob(jobId, { status: 'error', error: 'No se pudo leer el video (¿está corrupto o en un formato no soportado?).' });
+    cleanupFile(inputPath);
+    return;
+  }
+  if (jobs.get(jobId)?.status === 'cancelled') {
+    cleanupFile(inputPath);
+    return;
+  }
+
+  const maxDuration = sourceInfo.durationSec || 0;
+  const start = Math.max(0, parseFloat(req.body.start) || 0);
+  let end = parseFloat(req.body.end);
+  if (!Number.isFinite(end) || end <= start) end = maxDuration || start + 5;
+  end = Math.min(end, maxDuration || end);
+  // Tope duro de 15s de fragmento: que nadie se mande un GIF de un video
+  // entero de 10 minutos y termine pesando un disparate (o tardando una
+  // eternidad en generarse).
+  const clipDuration = Math.min(15, Math.max(0.2, end - start));
+
+  const command = ffmpeg(inputPath)
+    .seekInput(start)
+    .duration(clipDuration)
+    .outputOptions([
+      '-filter_complex',
+      `fps=${fps},scale=${width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=${quality.maxColors}[p];[s1][p]paletteuse=dither=${quality.dither}`,
+    ]);
+
+  runJob(jobId, command, [inputPath], outputPath, {
+    userId: req.session.user.id,
+    downloadName,
+    source: 'gif',
+    inputSize: req.file.size,
+  });
+});
+
 // --- Mini editor: varios clips, recorte por clip, texto quemado opcional ---
 app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), async (req, res) => {
   if (!req.files || req.files.length === 0) {
