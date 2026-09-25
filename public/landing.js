@@ -3,7 +3,7 @@
 // de la pantalla. Puramente decorativo — si no encuentra los elementos (por
 // ejemplo, esta pagina cambio de estructura) no rompe nada, solo no hace nada.
 (function () {
-  const track = document.querySelector('.feature-track');
+  const track = document.getElementById('featureTimeline');
   const mascot = document.getElementById('featureMascot');
   const steps = document.querySelectorAll('.feature-step');
   if (!track || !mascot || !steps.length) return;

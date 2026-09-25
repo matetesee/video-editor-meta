@@ -133,22 +133,23 @@ body {
 .landing-feature-card h3 { margin: 14px 0 6px; font-size: 1.02rem; }
 .landing-feature-card p { margin: 0; color: var(--text-dim); font-size: 0.87rem; line-height: 1.55; }
 
-/* ---- Linea de tiempo con mascota que recorre las funciones al scrollear ----
-   Inspirado en el efecto de scroll de headspa.my, pero con marca propia: un
-   badge de claqueta (no un elefante, no un circulo pelado) que viaja por una
-   guia vertical e ilumina la tarjeta que va tocando. Ver landing.js. */
-.feature-timeline { display: flex; gap: 22px; margin-top: 30px; align-items: stretch; }
-.feature-track { width: 46px; position: relative; flex-shrink: 0; }
-.feature-track::before {
+/* ---- Linea de tiempo en zigzag con mascota que recorre las funciones al
+   scrollear ---- Inspirado en el efecto de scroll de headspa.my, pero con
+   marca propia: un badge de claqueta (no un elefante, no un circulo pelado)
+   que viaja por una guia central, con las tarjetas alternando izquierda y
+   derecha (diagonal) y desenfocadas hasta que el mascota las toca o pasas el
+   mouse por encima (asi no sabes que sigue hasta llegar ahi). Ver landing.js. */
+.feature-timeline { position: relative; margin-top: 40px; padding: 10px 0; }
+.feature-timeline::before {
   content: '';
   position: absolute;
   left: 50%;
-  top: 22px;
-  bottom: 22px;
+  top: 0;
+  bottom: 0;
   width: 3px;
   transform: translateX(-50%);
   background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  opacity: 0.35;
+  opacity: 0.3;
   border-radius: 3px;
 }
 .feature-mascot {
@@ -159,6 +160,7 @@ body {
   height: 46px;
   transform: translate(-50%, 0);
   will-change: top;
+  z-index: 2;
 }
 .feature-mascot-face {
   width: 100%;
@@ -176,13 +178,29 @@ body {
   0%, 100% { transform: rotate(-6deg) translateY(0); }
   50% { transform: rotate(6deg) translateY(-3px); }
 }
-.feature-steps { flex: 1; display: flex; flex-direction: column; gap: 26px; min-width: 0; }
-.feature-step { opacity: 0.55; transition: opacity 0.3s, border-color 0.3s, transform 0.3s; }
-.feature-step.active { opacity: 1; border-color: var(--accent); transform: translateX(4px); }
+.feature-steps { display: flex; flex-direction: column; gap: 46px; }
+.feature-step {
+  width: calc(50% - 36px);
+  filter: blur(6px);
+  opacity: 0.4;
+  transition: filter 0.4s, opacity 0.4s, border-color 0.3s, transform 0.3s;
+}
+.feature-step:nth-child(odd) { margin-right: auto; }
+.feature-step:nth-child(even) { margin-left: auto; }
+.feature-step.active, .feature-step:hover {
+  filter: blur(0);
+  opacity: 1;
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
 
 @media (max-width: 640px) {
-  .feature-track { display: none; }
-  .feature-timeline { gap: 0; }
+  .feature-timeline::before, .feature-mascot { display: none; }
+  .feature-steps { gap: 18px; }
+  .feature-step, .feature-step:nth-child(odd), .feature-step:nth-child(even) {
+    width: 100%;
+    margin: 0;
+  }
 }
 
 .landing-footer { text-align: center; padding: 40px 0 60px; color: var(--text-dim); font-size: 0.85rem; }
