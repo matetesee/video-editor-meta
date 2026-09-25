@@ -484,7 +484,7 @@ body {
 .app-main { min-width: 0; }
 .app-main .app { max-width: 720px; }
 @media (min-width: 861px) {
-  .app-main { margin-left: 76px; }
+  .app-main { margin-left: 76px; width: calc(100% - 76px); }
 }
 
 /* Transicion suave al cambiar de herramienta (Optimizador <-> Mini Editor,
