@@ -12,8 +12,10 @@ const snakeStartBtn = document.getElementById('snakeStartBtn');
 
 const GRID_SIZE = 18; // celdas de 18px sobre un canvas de 360x360 = 20x20
 const GRID_COUNT = snakeCanvas ? snakeCanvas.width / GRID_SIZE : 20;
-const BASE_SPEED_MS = 130;
-const MIN_SPEED_MS = 70;
+// Mas lento que un snake "clasico" a proposito: da tiempo real a reaccionar
+// antes de comerse una pared, y la dificultad sube mas gradual con el puntaje.
+const BASE_SPEED_MS = 200;
+const MIN_SPEED_MS = 100;
 
 let ctx = null;
 let snake = [];
@@ -159,7 +161,7 @@ function draw() {
 }
 
 function currentSpeed() {
-  return Math.max(MIN_SPEED_MS, BASE_SPEED_MS - score * 3);
+  return Math.max(MIN_SPEED_MS, BASE_SPEED_MS - score * 2);
 }
 
 function tick() {

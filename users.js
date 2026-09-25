@@ -824,13 +824,16 @@ async function setAppSetting(key, value) {
 }
 
 // ---- Skins del Dino (100% cosmetico, desbloqueo por mejor puntaje) ----
+// "shape" define la silueta que dibuja dino.js (blocky/round/spiky/longneck/
+// raptor) — asi cada skin no es solo un recolor, tambien cambia la forma del
+// dinosaurio.
 const DINO_SKINS = [
-  { key: 'classic', label: 'Clásico', unlockScore: 0, color: '#6c5ce7', colorDark: '#8272f0' },
-  { key: 'ice', label: 'Glaciar', unlockScore: 0, color: '#38bdf8', colorDark: '#7dd3fc' },
-  { key: 'ember', label: 'Ascuas', unlockScore: 0, color: '#f97316', colorDark: '#fb923c' },
-  { key: 'gold', label: 'Dorado', unlockScore: 1000, color: '#eab308', colorDark: '#fde047' },
-  { key: 'shadow', label: 'Sombra', unlockScore: 3000, color: '#7c3aed', colorDark: '#a78bfa' },
-  { key: 'rainbow', label: 'Arcoíris', unlockScore: 10000, color: 'rainbow', colorDark: 'rainbow' },
+  { key: 'classic', label: 'Clásico', unlockScore: 0, color: '#6c5ce7', colorDark: '#8272f0', shape: 'blocky' },
+  { key: 'ice', label: 'Glaciar', unlockScore: 0, color: '#38bdf8', colorDark: '#7dd3fc', shape: 'round' },
+  { key: 'ember', label: 'Ascuas', unlockScore: 0, color: '#f97316', colorDark: '#fb923c', shape: 'spiky' },
+  { key: 'gold', label: 'Dorado', unlockScore: 1000, color: '#eab308', colorDark: '#fde047', shape: 'longneck' },
+  { key: 'shadow', label: 'Sombra', unlockScore: 3000, color: '#7c3aed', colorDark: '#a78bfa', shape: 'raptor' },
+  { key: 'rainbow', label: 'Arcoíris', unlockScore: 10000, color: 'rainbow', colorDark: 'rainbow', shape: 'blocky' },
 ];
 
 async function isDinoAllSkinsUnlocked() {
