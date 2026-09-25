@@ -135,13 +135,55 @@
       <h1>🎬 Editor de Video de Dematiu Para Meta</h1>
       <p class="subtitle">Subí tu video, rotalo, cambiá el codec de audio y descargalo optimizado.</p>
     </header>
+    <button type="button" class="btn-secondary focus-mode-btn" id="focusModeBtn" title="Modo foco: ocultar menú y aprovechar toda la pantalla">⛶</button>
 
     <main>
       <div id="homeSection" class="hidden">
-        <p class="section-label" style="margin-top:0;">Inicio</p>
-        <h2 class="updates-title">Todas tus herramientas</h2>
-        <p class="meta-hint" style="margin:0 0 20px;">Elegí a dónde ir.</p>
-        <div class="home-grid">
+        <div class="home-header-row">
+          <div>
+            <h2 class="home-greeting" id="homeGreeting">Hola 👋</h2>
+            <p class="meta-hint" id="homeGreetingSub" style="margin:0;">¿Qué querés hacer hoy?</p>
+          </div>
+          <div class="home-new-wrap">
+            <button type="button" class="btn-primary" id="homeNewBtn">+ Nuevo</button>
+            <div class="home-new-menu hidden" id="homeNewMenu">
+              <button type="button" data-go="optimizerSection">🎯 Optimizador Meta</button>
+              <button type="button" data-go="editorSection">✂️ Mini Editor</button>
+              <button type="button" data-go="audioSection">🎧 Extraer Audio</button>
+              <button type="button" data-go="gifSection">🖼️ GIF Maker</button>
+              <button type="button" data-go="speedSection">⚡ Velocidad</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="progress-stats-grid" id="homeStatsGrid">
+          <div class="progress-stat-card skeleton-card"><div class="skeleton-line" style="width:60%"></div></div>
+          <div class="progress-stat-card skeleton-card"><div class="skeleton-line" style="width:60%"></div></div>
+          <div class="progress-stat-card skeleton-card"><div class="skeleton-line" style="width:60%"></div></div>
+          <div class="progress-stat-card skeleton-card"><div class="skeleton-line" style="width:60%"></div></div>
+        </div>
+
+        <p class="section-label">Continuar trabajando</p>
+        <div id="homeRecentWork"><p class="empty-hint">Cargando…</p></div>
+
+        <p class="section-label">⭐ Tus favoritos</p>
+        <div id="homeFavoritesBody"><p class="empty-hint">Cargando…</p></div>
+
+        <div class="home-two-col">
+          <div class="panel" style="margin-bottom:0;">
+            <p class="section-label" style="margin-top:0;">🎉 Nuevo en Dematiu</p>
+            <div id="homeNewsBody"></div>
+          </div>
+          <div class="panel" style="margin-bottom:0;">
+            <p class="section-label" style="margin-top:0;">🕘 Actividad reciente</p>
+            <div id="homeActivityBody"><p class="empty-hint">Cargando…</p></div>
+          </div>
+        </div>
+
+        <p class="section-label">Todas tus herramientas</p>
+        <input type="text" id="homeToolSearch" class="home-search-input" placeholder="🔍 Buscar herramienta...">
+        <p class="empty-hint hidden" id="homeSearchEmpty">No encontramos esa herramienta.</p>
+        <div class="home-grid" id="homeGrid">
           <button type="button" class="home-card" data-go="optimizerSection">
             <span class="icon-badge icon-badge-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
             <span class="home-card-title">Optimizador Meta</span>
@@ -893,6 +935,7 @@
   <script src="gif.js"></script>
   <script src="speed.js"></script>
   <script src="updates.js"></script>
+  <script src="home.js"></script>
   <script src="snake.js"></script>
   <script src="dino.js"></script>
   <script src="spotlight.js"></script>

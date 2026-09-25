@@ -523,6 +523,147 @@ body {
 .home-card .icon-badge svg { width: 26px; height: 26px; }
 .home-card-title { font-size: 1rem; font-weight: 700; color: var(--text); text-align: center; }
 
+/* ---- Inicio: cabecera, "+Nuevo", stats, trabajo reciente, busqueda ---- */
+.home-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.home-greeting { margin: 0 0 4px; font-size: 1.5rem; }
+.home-new-wrap { position: relative; }
+.home-new-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+}
+.home-new-menu button {
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-new-menu button:hover { background: var(--input-bg); }
+
+.home-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0 28px; }
+@media (max-width: 640px) { .home-two-col { grid-template-columns: 1fr; } }
+
+.home-search-input {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 0.92rem;
+  margin: 8px 0 18px;
+}
+.home-search-input:focus { outline: none; border-color: var(--accent); }
+
+.home-recent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.home-recent-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 14px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.home-recent-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.home-recent-icon { width: 40px; height: 40px; flex-shrink: 0; }
+.home-recent-icon svg { width: 22px; height: 22px; }
+.home-recent-body { flex: 1; min-width: 0; }
+.home-recent-title { font-weight: 700; font-size: 0.88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-recent-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+.home-recent-card .btn-secondary { padding: 6px 12px; font-size: 0.76rem; flex-shrink: 0; }
+
+/* Skeleton loader: solo mientras carga la primera vez, nada exagerado */
+.skeleton-card { pointer-events: none; }
+.skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--input-bg) 25%, var(--panel-border) 50%, var(--input-bg) 75%);
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.3s ease-in-out infinite;
+}
+@keyframes skeletonPulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---- Modo Foco: oculta sidebar y header para aprovechar la pantalla ---- */
+body.focus-mode .sidebar { display: none; }
+body.focus-mode .app-main { margin-left: 0 !important; }
+body.focus-mode header { display: none; }
+.focus-mode-btn {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 50;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 1.1rem;
+  opacity: 0.55;
+}
+.focus-mode-btn:hover { opacity: 1; }
+body.focus-mode .focus-mode-btn {
+  border-radius: 999px;
+  width: auto;
+  padding: 10px 18px;
+  opacity: 1;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 30px -8px rgba(59, 130, 246, 0.7);
+}
+
+/* ---- Quick Drop global (arrastrar un video sobre Inicio) ---- */
+.quick-drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 13, 0.85);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--accent);
+}
+.quick-drop-picker {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 28px;
+  text-align: center;
+  max-width: 380px;
+}
+.quick-drop-picker h3 { margin: 0 0 16px; }
+.quick-drop-picker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.quick-drop-picker-grid button {
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 14px 10px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.quick-drop-picker-grid button:hover { border-color: var(--accent); }
+
 .speed-preset-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .speed-preset-btn {
   padding: 8px 14px;

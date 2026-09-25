@@ -195,6 +195,7 @@ app.get('/api/me', requireAuthApi, async (req, res) => {
     const referrals = await countReferrals(req.session.user.id);
     res.json({
       email: req.session.user.email,
+      displayName: (user && user.display_name) || null,
       avatarUrl: (user && user.avatar_data_url) || null,
       quota,
       referralCode: user && user.referral_code,

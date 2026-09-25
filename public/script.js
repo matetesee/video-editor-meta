@@ -599,6 +599,7 @@ document.querySelectorAll('.section-tab').forEach((tab) => {
       .forEach((section) => {
         section.classList.toggle('hidden', section.id !== tab.dataset.section);
       });
+    if (tab.dataset.section === 'homeSection' && window.renderHome) window.renderHome();
     if (tab.dataset.section === 'historySection' && window.loadHistory) window.loadHistory();
     if (tab.dataset.section === 'updatesSection' && window.renderUpdates) window.renderUpdates();
     if (tab.dataset.section === 'progressSection' && window.renderProgress) window.renderProgress();
@@ -752,6 +753,7 @@ document.querySelectorAll('.fav-star-btn').forEach((btn) => {
       btn.textContent = data.favorited ? '★' : '☆';
       btn.classList.toggle('is-favorite', data.favorited);
       if (window.renderFavoritesCard) window.renderFavoritesCard();
+      if (window.renderHomeFavorites) window.renderHomeFavorites();
     } catch (err) {
       // silencioso: la estrella simplemente no cambia
     } finally {

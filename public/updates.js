@@ -4,6 +4,27 @@
 // mejorando sin tener que preguntar.
 const UPDATES = [
   {
+    type: 'feature',
+    date: '2026-09-25',
+    title: 'Inicio rediseñado: estadísticas, favoritos y trabajo reciente',
+    description: 'La pantalla de Inicio ahora es un dashboard de verdad: saludo, tus números reales, tus últimos archivos para retomar, tus herramientas favoritas y un buscador para encontrar cualquier función al toque.',
+    tags: ['Inicio'],
+  },
+  {
+    type: 'feature',
+    date: '2026-09-25',
+    title: 'GIF Maker',
+    description: 'Nueva herramienta: convertí cualquier fragmento de tu video en un GIF. Elegís inicio y fin, FPS, resolución y calidad de color.',
+    tags: ['Nueva herramienta'],
+  },
+  {
+    type: 'feature',
+    date: '2026-09-25',
+    title: 'Herramienta de Velocidad',
+    description: 'Acelerá o ralentizá tus videos (de 0.25x a 4x, o un valor a medida), con el audio sincronizado automáticamente o silenciado si preferís.',
+    tags: ['Nueva herramienta'],
+  },
+  {
     type: 'fix',
     date: '2026-09-10',
     title: 'Arrastrar clips y texto ya no se traba',
