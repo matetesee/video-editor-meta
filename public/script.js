@@ -751,3 +751,37 @@ document.querySelectorAll('.fav-star-btn').forEach((btn) => {
     }
   });
 });
+
+// ---- Sidebar colapsable (rail de iconos <-> expandido con etiquetas) ----
+// Se recuerda por navegador (localStorage), no por cuenta: es solo una
+// preferencia de pantalla, no hace falta sincronizarla entre dispositivos.
+(function () {
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('sidebarToggleBtn');
+  const brandIcon = document.querySelector('.sidebar-brand-icon');
+  if (!sidebar) return;
+
+  function setExpanded(expanded) {
+    sidebar.classList.toggle('expanded', expanded);
+    try {
+      localStorage.setItem('sidebarExpanded', expanded ? '1' : '0');
+    } catch (err) {
+      // sin localStorage, simplemente no se recuerda la proxima vez
+    }
+  }
+
+  let saved = null;
+  try {
+    saved = localStorage.getItem('sidebarExpanded');
+  } catch (err) {
+    // sin localStorage, arranca colapsado (default)
+  }
+  setExpanded(saved === '1');
+
+  if (toggleBtn) toggleBtn.addEventListener('click', () => setExpanded(!sidebar.classList.contains('expanded')));
+  if (brandIcon) {
+    brandIcon.addEventListener('click', () => {
+      if (!sidebar.classList.contains('expanded')) setExpanded(true);
+    });
+  }
+})();

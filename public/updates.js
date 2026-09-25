@@ -183,11 +183,33 @@ window.renderUpdates = function renderUpdates() {
     }
     const badge = UPDATE_TYPE_LABELS[u.type] || UPDATE_TYPE_LABELS.improvement;
     html += `
-      <div class="update-row">
+      <div class="update-row scroll-reveal">
         <div class="update-row-dot ${badge.className}"></div>
         ${updateCardHtml(u)}
       </div>
     `;
   });
   timelineEl.innerHTML = html;
+
+  // Animacion de scroll: cada actualizacion anterior aparece (fade + subida
+  // suave) recien cuando entra en pantalla, en vez de estar todas visibles
+  // de entrada. Se desconecta sola una vez que ya se revelo (no hace falta
+  // seguir observando algo que ya se mostro).
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('revealed');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
+    timelineEl.querySelectorAll('.scroll-reveal').forEach((el) => observer.observe(el));
+  } else {
+    // Navegador viejo sin soporte: mejor mostrar todo de una que no mostrar nada.
+    timelineEl.querySelectorAll('.scroll-reveal').forEach((el) => el.classList.add('revealed'));
+  }
 };

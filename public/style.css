@@ -178,7 +178,7 @@ body {
   0%, 100% { transform: rotate(-6deg) translateY(0); }
   50% { transform: rotate(6deg) translateY(-3px); }
 }
-.feature-steps { display: flex; flex-direction: column; gap: 46px; }
+.feature-steps { display: flex; flex-direction: column; gap: 34px; }
 .feature-step {
   width: calc(50% - 36px);
   filter: blur(6px);
@@ -203,7 +203,9 @@ body {
   }
 }
 
-.landing-footer { text-align: center; padding: 40px 0 60px; color: var(--text-dim); font-size: 0.85rem; }
+.landing-closing-cta { text-align: center; margin: 60px auto 0; padding: 36px 20px; border-top: 1px solid var(--panel-border); }
+.landing-closing-cta h2 { margin: 0 0 8px; font-size: 1.6rem; }
+.landing-footer { text-align: center; padding: 24px 0 60px; color: var(--text-dim); font-size: 0.85rem; }
 .landing-footer a { color: var(--accent-hover); text-decoration: none; }
 
 @media (max-width: 640px) {
@@ -327,13 +329,18 @@ body {
   align-items: stretch;
 }
 .sidebar {
-  width: 240px;
+  width: 76px;
   flex-shrink: 0;
   background: var(--panel);
   border-right: 1px solid var(--panel-border);
   display: flex;
   flex-direction: column;
   padding: 22px 0 16px;
+  overflow: hidden;
+  transition: width 0.22s ease;
+}
+@media (min-width: 861px) {
+  .sidebar.expanded { width: 240px; }
 }
 .sidebar-brand {
   display: flex;
@@ -345,7 +352,29 @@ body {
   color: var(--text);
   border-bottom: 1px solid var(--panel-border);
   margin-bottom: 14px;
+  position: relative;
 }
+.sidebar-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: none;
+  color: var(--text-dim);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.sidebar-toggle svg { width: 14px; height: 14px; }
+/* Colapsado: ni el boton se ve (rail limpio, solo iconos) — clickeando el
+   logo se expande. Expandido: aparece el boton para volver a colapsar. */
+.sidebar.expanded .sidebar-toggle { display: inline-flex; transform: rotate(180deg); }
+.sidebar-toggle:hover { color: var(--text); border-color: var(--accent); }
+.sidebar-brand-icon { cursor: pointer; }
 .sidebar-brand-icon {
   font-size: 1.2rem;
   width: 34px;
@@ -374,6 +403,8 @@ body {
   white-space: nowrap;
 }
 .sidebar-item span { overflow: hidden; text-overflow: ellipsis; }
+.nav-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; }
+.nav-icon svg { width: 100%; height: 100%; }
 /* Pisa el estilo "pildora horizontal" de .section-tab: acá va vertical, a
    todo el ancho, alineado a la izquierda. */
 .sidebar-item.section-tab {
@@ -389,6 +420,53 @@ body {
 }
 .sidebar-link { color: var(--text-dim); }
 .sidebar-link:hover { background: var(--input-bg); color: var(--text); }
+
+.sidebar-item { position: relative; }
+.sidebar-item[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 30;
+  box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- Rail colapsado (default) vs. expandido — SOLO en desktop (861px+);
+   en mobile el sidebar ya tiene su propio layout horizontal mas abajo. ----
+   Colapsado: solo iconos, centrados, sin texto — clickeando el logo o el
+   boton (que solo aparece expandido) se alterna. El estado elegido se
+   recuerda por navegador (ver script.js). Con el mouse encima de un icono
+   colapsado aparece un tooltip con el nombre (::after con data-tooltip). */
+@media (min-width: 861px) {
+  .sidebar:not(.expanded) .sidebar-brand { padding: 0 0 20px; justify-content: center; }
+  .sidebar:not(.expanded) .sidebar-brand-text,
+  .sidebar:not(.expanded) .sidebar-item > span:not(.nav-icon),
+  .sidebar:not(.expanded) .fav-star-btn,
+  .sidebar:not(.expanded) .sidebar-pills,
+  .sidebar:not(.expanded) .sidebar-user-email,
+  .sidebar:not(.expanded) .name-badges,
+  .sidebar:not(.expanded) .sidebar-footer-actions .link-btn {
+    display: none;
+  }
+  .sidebar:not(.expanded) .sidebar-item { justify-content: center; padding: 10px; }
+  .sidebar:not(.expanded) .sidebar-nav-row .sidebar-item { flex: none; width: 100%; }
+  .sidebar:not(.expanded) .sidebar-user { justify-content: center; }
+  .sidebar:not(.expanded) .sidebar-footer-actions { justify-content: center; }
+  .sidebar:not(.expanded) .sidebar-item[data-tooltip]:hover::after { opacity: 1; visibility: visible; }
+}
 
 .sidebar-footer {
   margin-top: auto;
@@ -414,6 +492,20 @@ body {
 
 .app-main { flex: 1; min-width: 0; }
 .app-main .app { max-width: 720px; }
+
+/* Transicion suave al cambiar de herramienta (Optimizador <-> Mini Editor,
+   etc.): antes el cambio era instantaneo y se sentia como un salto brusco.
+   Como el toggle es display:none <-> block (via .hidden), una animation (no
+   una transition) es lo que realmente se dispara cada vez que la seccion
+   vuelve a mostrarse. */
+#optimizerSection, #editorSection, #audioSection, #historySection,
+#progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection {
+  animation: sectionFadeIn 0.28s ease;
+}
+@keyframes sectionFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @media (max-width: 860px) {
   .app-shell { flex-direction: column; }
@@ -1490,6 +1582,8 @@ select {
 }
 .updates-month-label:first-child { margin-top: 0; }
 .update-row { position: relative; margin-bottom: 14px; }
+.update-row.scroll-reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.5s ease, transform 0.5s ease; }
+.update-row.scroll-reveal.revealed { opacity: 1; transform: translateY(0); }
 .update-row-dot {
   position: absolute;
   left: -22px;
