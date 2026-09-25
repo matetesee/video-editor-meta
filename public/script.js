@@ -595,7 +595,7 @@ document.querySelectorAll('.section-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.section-tab').forEach((t) => t.classList.toggle('active', t === tab));
     document
-      .querySelectorAll('#optimizerSection, #editorSection, #audioSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
+      .querySelectorAll('#homeSection, #optimizerSection, #editorSection, #audioSection, #historySection, #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection')
       .forEach((section) => {
         section.classList.toggle('hidden', section.id !== tab.dataset.section);
       });
@@ -750,6 +750,10 @@ document.querySelectorAll('.fav-star-btn').forEach((btn) => {
       btn.disabled = false;
     }
   });
+});
+
+document.querySelectorAll('.home-card[data-go]').forEach((card) => {
+  card.addEventListener('click', () => goToSection(card.dataset.go));
 });
 
 // ---- Sidebar colapsable (rail de iconos <-> expandido con etiquetas) ----

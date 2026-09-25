@@ -86,10 +86,11 @@ body {
   font-size: 1.3rem;
   flex-shrink: 0;
 }
-.icon-badge-blue { background: rgba(59, 130, 246, 0.15); }
-.icon-badge-violet { background: rgba(139, 92, 246, 0.15); }
-.icon-badge-green { background: rgba(46, 204, 113, 0.15); }
-.icon-badge-orange { background: rgba(249, 115, 22, 0.15); }
+.icon-badge svg { width: 22px; height: 22px; }
+.icon-badge-blue { background: rgba(59, 130, 246, 0.15); color: #5b9dfb; }
+.icon-badge-violet { background: rgba(139, 92, 246, 0.15); color: #b79bfa; }
+.icon-badge-green { background: rgba(46, 204, 113, 0.15); color: #4ade80; }
+.icon-badge-orange { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
 
 /* ---- Landing publica (pre-login) ---- */
 .landing-page { position: relative; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
@@ -322,25 +323,32 @@ body {
   color: #fff;
 }
 
-/* ---- Layout con menu lateral (sidebar) ---- */
-.app-shell {
-  display: flex;
-  min-height: 100vh;
-  align-items: stretch;
-}
+/* ---- Layout con menu lateral (sidebar) ----
+   El sidebar es "fixed" (flota sobre el contenido) para que expandirlo al
+   pasar el mouse NUNCA empuje/reacomode el contenido principal — .app-main
+   reserva un margen fijo del ancho colapsado y ya. Solo aplica en desktop:
+   en mobile (media query de abajo) vuelve a ser una barra normal arriba. */
+.app-shell { position: relative; display: flex; min-height: 100vh; }
 .sidebar {
-  width: 76px;
-  flex-shrink: 0;
   background: var(--panel);
   border-right: 1px solid var(--panel-border);
   display: flex;
   flex-direction: column;
   padding: 22px 0 16px;
   overflow: hidden;
-  transition: width 0.22s ease;
 }
 @media (min-width: 861px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 76px;
+    z-index: 40;
+    transition: width 0.22s ease, box-shadow 0.22s ease;
+  }
   .sidebar.expanded { width: 240px; }
+  .sidebar:not(.expanded):hover { width: 240px; box-shadow: 8px 0 30px rgba(0, 0, 0, 0.4); }
 }
 .sidebar-brand {
   display: flex;
@@ -352,27 +360,31 @@ body {
   color: var(--text);
   border-bottom: 1px solid var(--panel-border);
   margin-bottom: 14px;
-  position: relative;
 }
+/* Flechita siempre visible pegada al borde derecho del rail — es la unica
+   pista de que el menu se puede fijar abierto (aparte de que ya se expande
+   solo con pasar el mouse). Vive afuera de .sidebar-brand, centrada en toda
+   la altura del sidebar, para que no compita por espacio con el logo. */
 .sidebar-toggle {
-  margin-left: auto;
-  flex-shrink: 0;
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: 50%;
   border: 1px solid var(--panel-border);
-  background: none;
+  background: var(--panel);
   color: var(--text-dim);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
+  z-index: 45;
 }
-.sidebar-toggle svg { width: 14px; height: 14px; }
-/* Colapsado: ni el boton se ve (rail limpio, solo iconos) — clickeando el
-   logo se expande. Expandido: aparece el boton para volver a colapsar. */
-.sidebar.expanded .sidebar-toggle { display: inline-flex; transform: rotate(180deg); }
+.sidebar-toggle svg { width: 14px; height: 14px; transition: transform 0.2s; }
+.sidebar.expanded .sidebar-toggle svg { transform: rotate(180deg); }
 .sidebar-toggle:hover { color: var(--text); border-color: var(--accent); }
 .sidebar-brand-icon { cursor: pointer; }
 .sidebar-brand-icon {
@@ -422,50 +434,29 @@ body {
 .sidebar-link:hover { background: var(--input-bg); color: var(--text); }
 
 .sidebar-item { position: relative; }
-.sidebar-item[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  color: var(--text);
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.15s;
-  z-index: 30;
-  box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
-}
 
 /* ---- Rail colapsado (default) vs. expandido — SOLO en desktop (861px+);
    en mobile el sidebar ya tiene su propio layout horizontal mas abajo. ----
-   Colapsado: solo iconos, centrados, sin texto — clickeando el logo o el
-   boton (que solo aparece expandido) se alterna. El estado elegido se
-   recuerda por navegador (ver script.js). Con el mouse encima de un icono
-   colapsado aparece un tooltip con el nombre (::after con data-tooltip). */
+   Colapsado: solo iconos, centrados, sin texto. Se expande solo (mostrando
+   los nombres) con pasar el mouse por encima, para que se entienda que es
+   cada icono — y ademas se puede DEJAR fijo abierto con el boton/logo
+   (clase .expanded, se recuerda por navegador, ver script.js). */
 @media (min-width: 861px) {
-  .sidebar:not(.expanded) .sidebar-brand { padding: 0 0 20px; justify-content: center; }
-  .sidebar:not(.expanded) .sidebar-brand-text,
-  .sidebar:not(.expanded) .sidebar-item > span:not(.nav-icon),
-  .sidebar:not(.expanded) .fav-star-btn,
-  .sidebar:not(.expanded) .sidebar-pills,
-  .sidebar:not(.expanded) .sidebar-user-email,
-  .sidebar:not(.expanded) .name-badges,
-  .sidebar:not(.expanded) .sidebar-footer-actions .link-btn {
+  .sidebar:not(.expanded):not(:hover) .sidebar-brand { padding: 0 0 20px; justify-content: center; }
+  .sidebar:not(.expanded):not(:hover) .sidebar-brand-text,
+  .sidebar:not(.expanded):not(:hover) .sidebar-item > span:not(.nav-icon),
+  .sidebar:not(.expanded):not(:hover) .fav-star-btn,
+  .sidebar:not(.expanded):not(:hover) .sidebar-pills,
+  .sidebar:not(.expanded):not(:hover) .sidebar-user-email,
+  .sidebar:not(.expanded):not(:hover) .name-badges,
+  .sidebar:not(.expanded):not(:hover) .sidebar-footer-actions .link-btn {
     display: none;
   }
-  .sidebar:not(.expanded) .sidebar-item { justify-content: center; padding: 10px; }
-  .sidebar:not(.expanded) .sidebar-nav-row .sidebar-item { flex: none; width: 100%; }
-  .sidebar:not(.expanded) .sidebar-user { justify-content: center; }
-  .sidebar:not(.expanded) .sidebar-footer-actions { justify-content: center; }
-  .sidebar:not(.expanded) .sidebar-item[data-tooltip]:hover::after { opacity: 1; visibility: visible; }
+  .sidebar:not(.expanded):not(:hover) .sidebar-item { justify-content: center; padding: 10px; }
+  .sidebar:not(.expanded):not(:hover) .sidebar-nav-row .sidebar-item { flex: none; width: 100%; }
+  .sidebar:not(.expanded):not(:hover) .sidebar-user { justify-content: center; }
+  .sidebar:not(.expanded):not(:hover) .sidebar-footer-actions { justify-content: center; }
+  .sidebar:not(.expanded):hover { width: 240px; box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35); z-index: 40; }
 }
 
 .sidebar-footer {
@@ -490,18 +481,47 @@ body {
 .sidebar-footer-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .sidebar-footer-actions .link-btn { margin-left: auto; }
 
-.app-main { flex: 1; min-width: 0; }
+.app-main { min-width: 0; }
 .app-main .app { max-width: 720px; }
+@media (min-width: 861px) {
+  .app-main { margin-left: 76px; }
+}
 
 /* Transicion suave al cambiar de herramienta (Optimizador <-> Mini Editor,
    etc.): antes el cambio era instantaneo y se sentia como un salto brusco.
    Como el toggle es display:none <-> block (via .hidden), una animation (no
    una transition) es lo que realmente se dispara cada vez que la seccion
    vuelve a mostrarse. */
-#optimizerSection, #editorSection, #audioSection, #historySection,
+#homeSection, #optimizerSection, #editorSection, #audioSection, #historySection,
 #progressSection, #updatesSection, #supportSection, #snakeSection, #dinoSection {
   animation: sectionFadeIn 0.28s ease;
 }
+
+/* ---- Inicio: todas las herramientas como tarjetas grandes cuadradas ---- */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+.home-card {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.2s, transform 0.2s;
+  padding: 12px;
+}
+.home-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+.home-card .icon-badge { width: 52px; height: 52px; }
+.home-card .icon-badge svg { width: 26px; height: 26px; }
+.home-card-title { font-size: 1rem; font-weight: 700; color: var(--text); text-align: center; }
 @keyframes sectionFadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -526,6 +546,7 @@ body {
   .sidebar-item { width: auto; padding: 10px; }
   .sidebar-footer { margin-top: 0; padding: 0; border-top: none; flex-direction: row; align-items: center; flex-wrap: wrap; }
   .sidebar-user-email { display: none; }
+  .sidebar-toggle { display: none; }
 }
 
 .fun-footer {

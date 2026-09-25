@@ -27,6 +27,10 @@
         despues de Soporte — Admin no se mueve de la ultima posicion.
       -->
       <nav class="sidebar-nav">
+        <button type="button" class="section-tab sidebar-item" data-section="homeSection" data-tooltip="Inicio">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>
+          <span>Inicio</span>
+        </button>
         <div class="sidebar-nav-row">
           <button type="button" class="section-tab sidebar-item active" data-section="optimizerSection" data-tooltip="Optimizador Meta">
             <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
@@ -117,6 +121,53 @@
     </header>
 
     <main>
+      <div id="homeSection" class="hidden">
+        <p class="section-label" style="margin-top:0;">Inicio</p>
+        <h2 class="updates-title">Todas tus herramientas</h2>
+        <p class="meta-hint" style="margin:0 0 20px;">Elegí a dónde ir.</p>
+        <div class="home-grid">
+          <button type="button" class="home-card" data-go="optimizerSection">
+            <span class="icon-badge icon-badge-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            <span class="home-card-title">Optimizador Meta</span>
+          </button>
+          <button type="button" class="home-card" data-go="editorSection">
+            <span class="icon-badge icon-badge-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span>
+            <span class="home-card-title">Mini Editor</span>
+          </button>
+          <button type="button" class="home-card" data-go="audioSection">
+            <span class="icon-badge icon-badge-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></span>
+            <span class="home-card-title">Extraer Audio</span>
+          </button>
+          <button type="button" class="home-card" data-go="historySection">
+            <span class="icon-badge icon-badge-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
+            <span class="home-card-title">Historial</span>
+          </button>
+          <button type="button" class="home-card" data-go="progressSection">
+            <span class="icon-badge icon-badge-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="14 6 21 6 21 13"/></svg></span>
+            <span class="home-card-title">Mi Progreso</span>
+          </button>
+          <button type="button" class="home-card" data-go="updatesSection">
+            <span class="icon-badge icon-badge-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+            <span class="home-card-title">Actualizaciones</span>
+          </button>
+          <a href="/precios" class="home-card">
+            <span class="icon-badge icon-badge-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+            <span class="home-card-title">Planes</span>
+          </a>
+          <button type="button" class="home-card" data-go="supportSection">
+            <span class="icon-badge icon-badge-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+            <span class="home-card-title">Soporte</span>
+          </button>
+          <button type="button" class="home-card" data-go="snakeSection">
+            <span class="icon-badge icon-badge-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+            <span class="home-card-title">Serpiente</span>
+          </button>
+          <button type="button" class="home-card" data-go="dinoSection">
+            <span class="icon-badge icon-badge-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/></svg></span>
+            <span class="home-card-title">Dino</span>
+          </button>
+        </div>
+      </div>
       <div id="optimizerSection">
       <section class="panel" id="uploadPanel">
         <label class="dropzone" id="dropzone">
