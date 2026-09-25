@@ -12,10 +12,10 @@ const snakeStartBtn = document.getElementById('snakeStartBtn');
 
 const GRID_SIZE = 18; // celdas de 18px sobre un canvas de 360x360 = 20x20
 const GRID_COUNT = snakeCanvas ? snakeCanvas.width / GRID_SIZE : 20;
-// Mas lento que un snake "clasico" a proposito: da tiempo real a reaccionar
-// antes de comerse una pared, y la dificultad sube mas gradual con el puntaje.
-const BASE_SPEED_MS = 200;
-const MIN_SPEED_MS = 100;
+// Bien mas lento que un snake "clasico" a proposito: da tiempo real a
+// reaccionar antes de comerse una pared, y la dificultad sube muy gradual.
+const BASE_SPEED_MS = 340;
+const MIN_SPEED_MS = 160;
 
 let ctx = null;
 let snake = [];
@@ -24,7 +24,6 @@ let nextDirection = { x: 1, y: 0 };
 let apple = { x: 5, y: 5 };
 let score = 0;
 let highScore = 0;
-let loopHandle = null;
 let running = false;
 let initialized = false;
 let awaitingInput = false;
@@ -164,7 +163,7 @@ function currentSpeed() {
   return Math.max(MIN_SPEED_MS, BASE_SPEED_MS - score * 2);
 }
 
-function tick() {
+function doTick() {
   direction = nextDirection;
   const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
@@ -185,12 +184,41 @@ function tick() {
   }
 
   draw();
-  loopHandle = setTimeout(tick, currentSpeed());
+}
+
+// Motor del juego con requestAnimationFrame en vez de setTimeout encadenado.
+// Por que: un setTimeout normal puede quedar en cola y el navegador lo
+// "empuja" (pestaña sin foco, laptop que ahorra bateria, lo que sea) — y
+// cuando eso pasa, varios timeouts atrasados terminan disparando de golpe
+// uno atras del otro, y la serpiente se "teletransporta" varias celdas y
+// choca contra una pared sin que el jugador llegue a reaccionar. Con este
+// loop, cada frame real (~60 por segundo) se pregunta "¿ya pasaron los X ms
+// que dura un paso?" y avanza COMO MAXIMO un paso por frame — nunca puede
+// acumular pasos pendientes y "recuperar el tiempo perdido" de una.
+let lastFrameTime = 0;
+let tickAccumulator = 0;
+let rafHandle = null;
+
+function gameLoop(timestamp) {
+  if (!running) return;
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  const delta = timestamp - lastFrameTime;
+  lastFrameTime = timestamp;
+  const interval = currentSpeed();
+
+  tickAccumulator += Math.min(delta, interval);
+  if (tickAccumulator >= interval) {
+    tickAccumulator = 0;
+    doTick();
+    if (!running) return; // doTick() puede terminar el juego (gameOver)
+  }
+
+  rafHandle = requestAnimationFrame(gameLoop);
 }
 
 function gameOver() {
   running = false;
-  clearTimeout(loopHandle);
+  cancelAnimationFrame(rafHandle);
   snakeOverlayText.textContent = `💀 Perdiste — ${score} punto(s)`;
   snakeStartBtn.textContent = '🔄 Jugar de nuevo';
   snakeOverlay.classList.remove('hidden');
@@ -234,7 +262,9 @@ function startGame() {
   // apenas se apretaba "Jugar" y se comia la pared si no reaccionabas a
   // tiempo. Ahora no hay tick programado todavia: lo dispara beginMovement().
   awaitingInput = true;
-  clearTimeout(loopHandle);
+  cancelAnimationFrame(rafHandle);
+  lastFrameTime = 0;
+  tickAccumulator = 0;
   draw();
 }
 
@@ -263,8 +293,10 @@ function beginMovement(dir) {
   nextDirection = next;
   if (awaitingInput) {
     awaitingInput = false;
-    clearTimeout(loopHandle);
-    loopHandle = setTimeout(tick, currentSpeed());
+    lastFrameTime = 0;
+    tickAccumulator = 0;
+    cancelAnimationFrame(rafHandle);
+    rafHandle = requestAnimationFrame(gameLoop);
   }
 }
 
@@ -315,6 +347,6 @@ window.initSnakeGame = async function initSnakeGame() {
 
 window.pauseSnakeGame = function pauseSnakeGame() {
   running = false;
-  clearTimeout(loopHandle);
+  cancelAnimationFrame(rafHandle);
   document.removeEventListener('keydown', handleKeydown);
 };
