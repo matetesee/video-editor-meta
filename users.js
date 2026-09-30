@@ -971,19 +971,20 @@ async function getProgressSummary(userId) {
 // ---- Historial de videos ----
 const HISTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
-async function recordVideoHistory(userId, { id, title, source, outputSize, filePath }) {
+async function recordVideoHistory(userId, { id, title, source, outputSize, filePath, params, parentHistoryId }) {
   const expiresAt = new Date(Date.now() + HISTORY_TTL_MS);
   await pool.query(
-    `INSERT INTO video_history (id, user_id, title, source, output_size, file_path, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [id, userId, title, source, outputSize, filePath, expiresAt]
+    `INSERT INTO video_history (id, user_id, title, source, output_size, file_path, expires_at, params, parent_history_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [id, userId, title, source, outputSize, filePath, expiresAt, params ? JSON.stringify(params) : null, parentHistoryId || null]
   );
 }
 
 async function getVideoHistory(userId, limit = 20) {
   const { rows } = await pool.query(
-    `SELECT id, title, source, output_size, created_at, expires_at, (file_path IS NOT NULL) AS available
-     FROM video_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
+    `SELECT id, title, source, output_size, created_at, expires_at, pinned, parent_history_id,
+            (params IS NOT NULL) AS has_params, (file_path IS NOT NULL) AS available
+     FROM video_history WHERE user_id = $1 ORDER BY pinned DESC, created_at DESC LIMIT $2`,
     [userId, limit]
   );
   return rows;
@@ -994,15 +995,76 @@ async function getHistoryItem(id, userId) {
   return rows[0] || null;
 }
 
+// Cambia el titulo mostrado y/o el pin de un resultado. Devuelve la fila
+// actualizada, o null si no existe o no es de este usuario (evita que
+// alguien edite el historial de otra cuenta adivinando un id ajeno).
+async function updateHistoryItem(id, userId, { title, pinned }) {
+  const sets = [];
+  const values = [];
+  if (title !== undefined) { values.push(title); sets.push(`title = $${values.length}`); }
+  if (pinned !== undefined) { values.push(!!pinned); sets.push(`pinned = $${values.length}`); }
+  if (sets.length === 0) return getHistoryItem(id, userId);
+  values.push(id);
+  const idParam = values.length;
+  values.push(userId);
+  const userParam = values.length;
+  const { rows } = await pool.query(
+    `UPDATE video_history SET ${sets.join(', ')} WHERE id = $${idParam} AND user_id = $${userParam} RETURNING *`,
+    values
+  );
+  return rows[0] || null;
+}
+
+// Inserta la fila de una copia independiente de un resultado ya existente
+// (el archivo en disco ya fue copiado aparte, en server.js, antes de llamar
+// a esto). Nace sin pin y con su propia ventana de 24hs, sea cual sea el
+// estado del original: es una entidad nueva e independiente, no hereda nada
+// de la vida util del original.
+async function duplicateHistoryRow(original, userId, { newId, newFilePath, outputSize }) {
+  const expiresAt = new Date(Date.now() + HISTORY_TTL_MS);
+  const copyTitle = `${original.title} (copia)`.slice(0, 160);
+  const { rows } = await pool.query(
+    `INSERT INTO video_history (id, user_id, title, source, output_size, file_path, expires_at, params, parent_history_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [newId, userId, copyTitle, original.source, outputSize, newFilePath, expiresAt, original.params ? JSON.stringify(original.params) : null, original.parent_history_id]
+  );
+  return rows[0];
+}
+
 // Barrido periodico: borra del disco los archivos vencidos y elimina la
-// fila. Devuelve cuantos borro (para loguearlo).
+// fila. Los fijados quedan afuera de este barrido (ver columna `pinned`).
+// Devuelve cuantos borro (para loguearlo).
 async function cleanupExpiredHistory(deleteFileFn) {
-  const { rows } = await pool.query('SELECT id, file_path FROM video_history WHERE expires_at < now()');
+  const { rows } = await pool.query('SELECT id, file_path FROM video_history WHERE expires_at < now() AND pinned = false');
   for (const row of rows) {
     if (row.file_path) deleteFileFn(row.file_path);
   }
-  await pool.query('DELETE FROM video_history WHERE expires_at < now()');
+  await pool.query('DELETE FROM video_history WHERE expires_at < now() AND pinned = false');
   return rows.length;
+}
+
+// ---- Presets personales (configuraciones guardadas por herramienta) ----
+async function getUserPresets(userId, tool) {
+  const { rows } = await pool.query(
+    tool
+      ? `SELECT id, tool, name, params, created_at FROM user_presets WHERE user_id = $1 AND tool = $2 ORDER BY created_at DESC`
+      : `SELECT id, tool, name, params, created_at FROM user_presets WHERE user_id = $1 ORDER BY created_at DESC`,
+    tool ? [userId, tool] : [userId]
+  );
+  return rows;
+}
+
+async function createPreset(userId, { tool, name, params }) {
+  const { rows } = await pool.query(
+    `INSERT INTO user_presets (user_id, tool, name, params) VALUES ($1, $2, $3, $4) RETURNING id, tool, name, params, created_at`,
+    [userId, tool, name, JSON.stringify(params)]
+  );
+  return rows[0];
+}
+
+async function deletePreset(id, userId) {
+  const { rowCount } = await pool.query('DELETE FROM user_presets WHERE id = $1 AND user_id = $2', [id, userId]);
+  return rowCount > 0;
 }
 
 // Le saca a una cuenta el plan ilimitado (permanente o por dias, de cupon),
@@ -1229,7 +1291,12 @@ module.exports = {
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
+  updateHistoryItem,
+  duplicateHistoryRow,
   cleanupExpiredHistory,
+  getUserPresets,
+  createPreset,
+  deletePreset,
   FEEDBACK_REASONS,
   submitJobFeedback,
   getAdminFeedback,

@@ -221,6 +221,36 @@ async function initDb() {
       expires_at TIMESTAMPTZ NOT NULL
     );
   `);
+  // params: los parametros REALES con los que se genero este resultado (los
+  // mismos campos que ya se leen de req.body en cada ruta de proceso),
+  // guardados tal cual para poder reproducirlos despues sin adivinar nada
+  // ("reprocesar con esta configuracion"). parent_history_id: si este
+  // resultado se genero reutilizando OTRO resultado ya guardado como entrada
+  // (en vez de subir un archivo nuevo), queda apuntando a ese origen — asi se
+  // arma el arbol de versiones sin necesitar una tabla nueva de "proyectos".
+  // ON DELETE SET NULL: si el origen se borra (vencio y no estaba fijado), el
+  // derivado no se rompe, solo pierde la referencia.
+  await pool.query(`ALTER TABLE video_history ADD COLUMN IF NOT EXISTS params JSONB;`);
+  await pool.query(`ALTER TABLE video_history ADD COLUMN IF NOT EXISTS parent_history_id UUID REFERENCES video_history(id) ON DELETE SET NULL;`);
+  // pinned: un resultado fijado por el usuario queda exento del borrado
+  // automatico de 24hs (ver cleanupExpiredHistory en users.js).
+  await pool.query(`ALTER TABLE video_history ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;`);
+
+  // Presets personales: una configuracion de una herramienta guardada con
+  // nombre propio para volver a aplicarla despues (ej. "Meta Reels calidad
+  // alta"). params tiene la misma forma que video_history.params para esa
+  // herramienta, asi que aplicar un preset o reprocesar un resultado antiguo
+  // usan exactamente el mismo mecanismo del lado del frontend.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_presets (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      tool TEXT NOT NULL,
+      name TEXT NOT NULL,
+      params JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
   // Un registro por (usuario, dia calendario en el que proceso algo bien).
   // La clave primaria compuesta es lo que evita contar el mismo dia dos

@@ -1027,6 +1027,39 @@ header h1 { font-size: 1.8rem; margin: 0 0 8px; }
   opacity: 0.4;
   pointer-events: none;
 }
+.history-row.pinned {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.06);
+}
+.preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.preset-bar select {
+  flex: 1;
+  min-width: 180px;
+}
+.preset-bar .btn-secondary, .preset-bar .btn-danger {
+  flex-shrink: 0;
+}
+.history-row .history-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.history-title-input {
+  width: 100%;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--input-bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--text);
+}
 
 .clip-row {
   display: flex;

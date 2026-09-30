@@ -650,6 +650,29 @@ const HISTORY_SOURCE_LABELS = {
   gif: 'GIF Maker',
 };
 
+// Espera a que un job terminado por "Reprocesar" (lanzado sin que el usuario
+// vea la pantalla de esa herramienta) esté listo, reusando el mismo
+// /api/status que ya usa cada herramienta. Al terminar, recarga el historial
+// para que aparezca el nuevo resultado.
+function pollReprocessJob(jobId) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/status/${jobId}`);
+      const job = await res.json();
+      if (job.status === 'done') {
+        clearInterval(interval);
+        if (window.showToast) window.showToast('✅ Listo', 'Se reprocesó con la misma configuración.');
+        window.loadHistory();
+      } else if (job.status === 'error') {
+        clearInterval(interval);
+        if (window.showToast) window.showToast('❌ Error', job.error || 'No se pudo reprocesar.');
+      }
+    } catch {
+      clearInterval(interval);
+    }
+  }, 1000);
+}
+
 window.loadHistory = async function loadHistory() {
   historyList.innerHTML = '<p class="empty-hint">Cargando...</p>';
   historyEmpty.classList.add('hidden');
@@ -664,18 +687,100 @@ window.loadHistory = async function loadHistory() {
     }
     items.forEach((item) => {
       const row = document.createElement('div');
-      row.className = 'history-row' + (item.available ? '' : ' expired');
+      row.className = 'history-row' + (item.available ? '' : ' expired') + (item.pinned ? ' pinned' : '');
       const sourceLabel = HISTORY_SOURCE_LABELS[item.source] || 'Optimizador';
       row.innerHTML = `
         <div class="history-info">
-          <div class="history-title">${item.title}</div>
+          <div class="history-title" data-title>${item.pinned ? '📌 ' : ''}${item.title}</div>
           <div class="history-meta">${sourceLabel} · ${formatBytes(item.output_size)} · ${formatHistoryDate(item.created_at)}</div>
         </div>
-        <button type="button" class="btn-primary" data-id="${item.id}">⬇️ Descargar</button>
+        <div class="history-actions">
+          <button type="button" class="icon-btn pin-btn" title="${item.pinned ? 'Desfijar' : 'Fijar (no vence)'}">${item.pinned ? '📍' : '📌'}</button>
+          <button type="button" class="icon-btn rename-btn" title="Renombrar">✏️</button>
+          ${item.available ? `<button type="button" class="icon-btn duplicate-btn" title="Duplicar">📄</button>` : ''}
+          ${item.available && item.has_params ? `<button type="button" class="icon-btn reprocess-btn" title="Reprocesar con esta configuración">🔁</button>` : ''}
+          <button type="button" class="btn-primary download-btn" data-id="${item.id}">⬇️ Descargar</button>
+        </div>
       `;
-      row.querySelector('button').addEventListener('click', () => {
+      row.querySelector('.download-btn').addEventListener('click', () => {
         window.location.href = `/api/history/${item.id}/download`;
       });
+      row.querySelector('.pin-btn').addEventListener('click', async () => {
+        try {
+          await fetch(`/api/history/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pinned: !item.pinned }),
+          });
+          window.loadHistory();
+        } catch {
+          if (window.showToast) window.showToast('❌ Error', 'No se pudo fijar.');
+        }
+      });
+      row.querySelector('.rename-btn').addEventListener('click', () => {
+        const titleEl = row.querySelector('[data-title]');
+        const currentText = item.title;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'history-title-input';
+        input.value = currentText;
+        titleEl.replaceWith(input);
+        input.focus();
+        input.select();
+        const save = async () => {
+          const newTitle = input.value.trim();
+          if (newTitle && newTitle !== currentText) {
+            try {
+              await fetch(`/api/history/${item.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle }),
+              });
+            } catch {
+              if (window.showToast) window.showToast('❌ Error', 'No se pudo renombrar.');
+            }
+          }
+          window.loadHistory();
+        };
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') input.blur();
+          if (e.key === 'Escape') { input.removeEventListener('blur', save); window.loadHistory(); }
+        });
+      });
+      const duplicateBtn = row.querySelector('.duplicate-btn');
+      if (duplicateBtn) {
+        duplicateBtn.addEventListener('click', async () => {
+          duplicateBtn.disabled = true;
+          try {
+            const r = await fetch(`/api/history/${item.id}/duplicate`, { method: 'POST' });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'No se pudo duplicar.');
+            if (window.showToast) window.showToast('✅ Duplicado', 'Se creó una copia independiente.');
+            window.loadHistory();
+          } catch (err) {
+            if (window.showToast) window.showToast('❌ Error', err.message);
+            duplicateBtn.disabled = false;
+          }
+        });
+      }
+      const reprocessBtn = row.querySelector('.reprocess-btn');
+      if (reprocessBtn) {
+        reprocessBtn.addEventListener('click', async () => {
+          reprocessBtn.disabled = true;
+          try {
+            const r = await fetch(`/api/history/${item.id}/reprocess`, { method: 'POST' });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'No se pudo reprocesar.');
+            if (window.showToast) window.showToast('⏳ Reprocesando…', 'Te avisamos cuando esté listo.');
+            pollReprocessJob(d.jobId);
+          } catch (err) {
+            if (window.showToast) window.showToast('❌ Error', err.message);
+          } finally {
+            reprocessBtn.disabled = false;
+          }
+        });
+      }
       historyList.appendChild(row);
     });
   } catch (err) {
@@ -684,6 +789,92 @@ window.loadHistory = async function loadHistory() {
     historyEmpty.classList.remove('hidden');
   }
 };
+
+// ---- Presets del Optimizador (guardar/aplicar configuraciones propias) ----
+const optimizerPresetSelect = document.getElementById('optimizerPresetSelect');
+const optimizerPresetSaveBtn = document.getElementById('optimizerPresetSaveBtn');
+const optimizerPresetDeleteBtn = document.getElementById('optimizerPresetDeleteBtn');
+let optimizerPresets = [];
+
+function currentOptimizerParams() {
+  return {
+    rotation: String(rotation),
+    audioCodec: audioCodecSel.value,
+    audioBitrate: audioBitrateSel.value,
+    quality: qualitySel.value,
+    metaPreset: metaPresetSel.value,
+  };
+}
+
+function applyOptimizerParams(params) {
+  if (!params) return;
+  rotation = ((parseInt(params.rotation, 10) || 0) % 360 + 360) % 360;
+  rotationLabel.textContent = rotation + '°';
+  if (params.audioCodec) audioCodecSel.value = params.audioCodec;
+  if (params.audioBitrate) audioBitrateSel.value = params.audioBitrate;
+  if (params.quality) qualitySel.value = params.quality;
+  if (params.metaPreset) metaPresetSel.value = params.metaPreset;
+}
+
+async function loadOptimizerPresets() {
+  if (!optimizerPresetSelect) return;
+  try {
+    const res = await fetch('/api/presets?tool=optimizer');
+    const data = await res.json();
+    optimizerPresets = data.presets || [];
+    optimizerPresetSelect.innerHTML = '<option value="">Sin preset (ajustar manualmente)</option>' +
+      optimizerPresets.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+  } catch {
+    // si falla, se sigue pudiendo usar el optimizador normal sin presets
+  }
+}
+
+if (optimizerPresetSelect) {
+  optimizerPresetSelect.addEventListener('change', () => {
+    const preset = optimizerPresets.find((p) => String(p.id) === optimizerPresetSelect.value);
+    optimizerPresetDeleteBtn.classList.toggle('hidden', !preset);
+    if (preset) applyOptimizerParams(preset.params);
+  });
+}
+
+if (optimizerPresetSaveBtn) {
+  optimizerPresetSaveBtn.addEventListener('click', async () => {
+    const name = window.prompt('¿Cómo querés llamar a este preset?');
+    if (!name || !name.trim()) return;
+    try {
+      const res = await fetch('/api/presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool: 'optimizer', name: name.trim(), params: currentOptimizerParams() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo guardar el preset.');
+      await loadOptimizerPresets();
+      optimizerPresetSelect.value = String(data.preset.id);
+      optimizerPresetDeleteBtn.classList.remove('hidden');
+      if (window.showToast) window.showToast('✅ Preset guardado', `"${data.preset.name}" ya está disponible.`);
+    } catch (err) {
+      if (window.showToast) window.showToast('❌ Error', err.message);
+    }
+  });
+}
+
+if (optimizerPresetDeleteBtn) {
+  optimizerPresetDeleteBtn.addEventListener('click', async () => {
+    const id = optimizerPresetSelect.value;
+    if (!id) return;
+    if (!window.confirm('¿Eliminar este preset?')) return;
+    try {
+      await fetch(`/api/presets/${id}`, { method: 'DELETE' });
+      await loadOptimizerPresets();
+      optimizerPresetDeleteBtn.classList.add('hidden');
+    } catch {
+      if (window.showToast) window.showToast('❌ Error', 'No se pudo eliminar el preset.');
+    }
+  });
+}
+
+loadOptimizerPresets();
 
 // ---- Proponer una función (dentro de Soporte) ----
 const ideaSubmitBtn = document.getElementById('ideaSubmitBtn');

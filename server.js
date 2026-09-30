@@ -57,7 +57,12 @@ const {
   recordVideoHistory,
   getVideoHistory,
   getHistoryItem,
+  updateHistoryItem,
+  duplicateHistoryRow,
   cleanupExpiredHistory,
+  getUserPresets,
+  createPreset,
+  deletePreset,
   FEEDBACK_REASONS,
   submitJobFeedback,
   getAdminFeedback,
@@ -796,6 +801,55 @@ app.get('/api/history/:id/download', requireAuthApi, async (req, res) => {
   }
 });
 
+// Renombrar y/o fijar (pin) un resultado del historial. Un resultado fijado
+// no se borra con el resto a las 24hs (ver cleanupExpiredHistory).
+app.patch('/api/history/:id', requireAuthApi, async (req, res) => {
+  try {
+    const patch = {};
+    if (req.body.title !== undefined) {
+      const current = await getHistoryItem(req.params.id, req.session.user.id);
+      if (!current) return res.status(404).json({ error: 'No se encontró ese resultado.' });
+      const ext = path.extname(current.title) || '';
+      patch.title = (sanitizeFilename(req.body.title).slice(0, 150) + ext).slice(0, 160);
+    }
+    if (req.body.pinned !== undefined) patch.pinned = !!req.body.pinned;
+    if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'Nada para actualizar.' });
+    const updated = await updateHistoryItem(req.params.id, req.session.user.id, patch);
+    if (!updated) return res.status(404).json({ error: 'No se encontró ese resultado.' });
+    res.json({ ok: true, item: updated });
+  } catch (err) {
+    console.error('[history-patch]', err.message);
+    res.status(500).json({ error: 'No se pudo actualizar.' });
+  }
+});
+
+// Duplica un resultado: copia el archivo en disco (no vuelve a correr
+// ffmpeg) y crea una fila nueva e independiente — borrar una copia no afecta
+// a la otra.
+app.post('/api/history/:id/duplicate', requireAuthApi, async (req, res) => {
+  try {
+    const original = await getHistoryItem(req.params.id, req.session.user.id);
+    if (!original) return res.status(404).json({ error: 'No se encontró ese resultado.' });
+    if (!original.file_path || !fs.existsSync(original.file_path)) {
+      return res.status(400).json({ error: 'El archivo ya venció o se borró, no se puede duplicar.' });
+    }
+    const newId = randomUUID();
+    const ext = path.extname(original.file_path) || '';
+    const newFilePath = path.join(TMP_DIR, `${newId}${ext}`);
+    await fs.promises.copyFile(original.file_path, newFilePath);
+    const stat = await fs.promises.stat(newFilePath);
+    const item = await duplicateHistoryRow(original, req.session.user.id, {
+      newId,
+      newFilePath,
+      outputSize: stat.size,
+    });
+    res.json({ ok: true, item });
+  } catch (err) {
+    console.error('[history-duplicate]', err.message);
+    res.status(500).json({ error: 'No se pudo duplicar.' });
+  }
+});
+
 // Jobs en memoria (instancia unica - MVP). Sirve tanto para el optimizador
 // como para el mini editor: ambos comparten el mismo ciclo de vida
 // (analizando -> procesando -> listo/error/cancelado).
@@ -824,7 +878,7 @@ function setJob(jobId, patch) {
 // manda) sirve para calcular cuanto se "ahorro" de tamaño; el resto es para
 // poder guardar el resultado en el historial del usuario cuando termina.
 function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
-  const { progressFrom = 0, userId, downloadName, source, inputSize } = meta;
+  const { progressFrom = 0, userId, downloadName, source, inputSize, params, parentHistoryId } = meta;
   let stderrTail = [];
   let killedForTimeout = false;
   const timeoutHandle = setTimeout(() => {
@@ -889,6 +943,8 @@ function runJob(jobId, command, inputPaths, outputPath, meta = {}) {
             source: source || 'optimizer',
             outputSize,
             filePath: outputPath,
+            params,
+            parentHistoryId,
           }).catch((err) => console.error(`[history:${jobId}]`, err.message));
 
           // El cupo se descuenta recien aca (job terminado con exito), no al
@@ -1061,8 +1117,32 @@ async function requireQuota(req, res, next) {
   }
 }
 
-app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
+// Resuelve el archivo de entrada de una ruta de proceso: o bien viene recien
+// subido por multer (req.file), o bien se reutiliza el archivo de un
+// resultado que el usuario ya tiene en su Historial (req.body.sourceHistoryId),
+// sin que tenga que volver a subirlo. En el segundo caso cleanupInputPaths
+// queda vacio a proposito: ese archivo no es un temporal de esta request, es
+// el resultado ya guardado en video_history, y borrarlo al terminar el job
+// rompería ese resultado (y cualquier otra cosa que lo use despues).
+async function resolveInputFile(req) {
+  if (req.file) {
+    return { inputPath: req.file.path, inputSize: req.file.size, cleanupInputPaths: [req.file.path], parentHistoryId: null };
+  }
+  const sourceHistoryId = req.body.sourceHistoryId;
+  if (sourceHistoryId) {
+    const source = await getHistoryItem(sourceHistoryId, req.session.user.id);
+    if (!source || !source.file_path || !fs.existsSync(source.file_path)) {
+      return { error: 'El archivo de origen ya no está disponible (venció o se borró).' };
+    }
+    return { inputPath: source.file_path, inputSize: source.output_size, cleanupInputPaths: [], parentHistoryId: source.id };
+  }
+  return { error: 'No se recibió ningún video.' };
+}
+
+async function handleOptimizeRequest(req, res) {
+  const resolved = await resolveInputFile(req);
+  if (resolved.error) return res.status(400).json({ error: resolved.error });
+  const { inputPath, inputSize, cleanupInputPaths, parentHistoryId } = resolved;
 
   const rotation = parseInt(req.body.rotation || '0', 10);
   const audioCodecKey = req.body.audioCodec || 'aac';
@@ -1076,7 +1156,6 @@ app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), a
   const q = QUALITY_BITRATE[quality] || QUALITY_BITRATE.balanced;
 
   const jobId = randomUUID();
-  const inputPath = req.file.path;
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
 
   jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
@@ -1167,13 +1246,24 @@ app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), a
     }
   }
 
-  runJob(jobId, command, [inputPath], outputPath, {
+  runJob(jobId, command, cleanupInputPaths, outputPath, {
     userId: req.session.user.id,
     downloadName,
     source: 'optimizer',
-    inputSize: req.file.size,
+    inputSize,
+    parentHistoryId,
+    params: {
+      rotation: req.body.rotation,
+      audioCodec: req.body.audioCodec,
+      audioBitrate: req.body.audioBitrate,
+      quality: req.body.quality,
+      metaPreset: req.body.metaPreset,
+      title: req.body.title,
+    },
   });
-});
+}
+
+app.post('/api/process', requireAuthApi, requireQuota, upload.single('video'), handleOptimizeRequest);
 
 // Descompone cualquier factor de velocidad en una cadena de filtros "atempo"
 // (cada uno solo admite entre 0.5x y 2x) para poder sincronizar el audio con
@@ -1197,15 +1287,16 @@ function buildAtempoChain(speed) {
 }
 
 // --- Speed Tool: cambia la velocidad de reproduccion (0.25x a 4x, o custom) ---
-app.post('/api/speed', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
+async function handleSpeedRequest(req, res) {
+  const resolved = await resolveInputFile(req);
+  if (resolved.error) return res.status(400).json({ error: resolved.error });
+  const { inputPath, inputSize, cleanupInputPaths, parentHistoryId } = resolved;
 
   const speed = Math.min(4, Math.max(0.25, parseFloat(req.body.speed) || 1));
   const mute = req.body.mute === 'true' || req.body.mute === '1';
   const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.mp4';
 
   const jobId = randomUUID();
-  const inputPath = req.file.path;
   const outputPath = path.join(TMP_DIR, `${jobId}.mp4`);
 
   jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
@@ -1243,13 +1334,17 @@ app.post('/api/speed', requireAuthApi, requireQuota, upload.single('video'), asy
     command.outputOptions(['-filter_complex', `[0:v]${videoFilter}[v];[0:a]${atempo}[a]`, '-map', '[v]', '-map', '[a]']);
   }
 
-  runJob(jobId, command, [inputPath], outputPath, {
+  runJob(jobId, command, cleanupInputPaths, outputPath, {
     userId: req.session.user.id,
     downloadName,
     source: 'speed',
-    inputSize: req.file.size,
+    inputSize,
+    parentHistoryId,
+    params: { speed: req.body.speed, mute: req.body.mute, title: req.body.title },
   });
-});
+}
+
+app.post('/api/speed', requireAuthApi, requireQuota, upload.single('video'), handleSpeedRequest);
 
 const GIF_QUALITY = {
   high: { maxColors: 256, dither: 'bayer:bayer_scale=1' },
@@ -1258,8 +1353,10 @@ const GIF_QUALITY = {
 };
 
 // --- GIF Maker: recorta un fragmento del video y lo exporta como GIF ---
-app.post('/api/gif', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibio ningun video.' });
+async function handleGifRequest(req, res) {
+  const resolved = await resolveInputFile(req);
+  if (resolved.error) return res.status(400).json({ error: resolved.error });
+  const { inputPath, inputSize, cleanupInputPaths, parentHistoryId } = resolved;
 
   const fps = Math.min(30, Math.max(5, parseInt(req.body.fps, 10) || 10));
   const width = Math.min(720, Math.max(120, parseInt(req.body.width, 10) || 480));
@@ -1267,7 +1364,6 @@ app.post('/api/gif', requireAuthApi, requireQuota, upload.single('video'), async
   const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.gif';
 
   const jobId = randomUUID();
-  const inputPath = req.file.path;
   const outputPath = path.join(TMP_DIR, `${jobId}.gif`);
 
   jobs.set(jobId, { status: 'analyzing', progress: 0, startedAt: Date.now(), downloadName });
@@ -1304,13 +1400,24 @@ app.post('/api/gif', requireAuthApi, requireQuota, upload.single('video'), async
       `fps=${fps},scale=${width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=${quality.maxColors}[p];[s1][p]paletteuse=dither=${quality.dither}`,
     ]);
 
-  runJob(jobId, command, [inputPath], outputPath, {
+  runJob(jobId, command, cleanupInputPaths, outputPath, {
     userId: req.session.user.id,
     downloadName,
     source: 'gif',
-    inputSize: req.file.size,
+    inputSize,
+    parentHistoryId,
+    params: {
+      fps: req.body.fps,
+      width: req.body.width,
+      quality: req.body.quality,
+      start: req.body.start,
+      end: req.body.end,
+      title: req.body.title,
+    },
   });
-});
+}
+
+app.post('/api/gif', requireAuthApi, requireQuota, upload.single('video'), handleGifRequest);
 
 // --- Mini editor: varios clips, recorte por clip, texto quemado opcional ---
 app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), async (req, res) => {
@@ -1503,12 +1610,13 @@ app.post('/api/edit', requireAuthApi, requireQuota, upload.array('clips', 20), a
 // el resto de la app; NO acepta links de YouTube/TikTok/etc, solo archivos
 // que el usuario ya tiene en su dispositivo (ver nota en README/chat sobre
 // por que no se agrego eso).
-app.post('/api/extract-audio', requireAuthApi, requireQuota, upload.single('video'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se recibió ningún video.' });
+async function handleExtractAudioRequest(req, res) {
+  const resolved = await resolveInputFile(req);
+  if (resolved.error) return res.status(400).json({ error: resolved.error });
+  const { inputPath, inputSize, cleanupInputPaths, parentHistoryId } = resolved;
 
   const format = ['mp3', 'wav', 'm4a'].includes(req.body.format) ? req.body.format : 'mp3';
   const bitrate = ['128k', '192k', '320k'].includes(req.body.bitrate) ? req.body.bitrate : '192k';
-  const inputPath = req.file.path;
   const jobId = randomUUID();
   const downloadName = sanitizeFilename(req.body.title).slice(0, 150) + '.' + format;
   const outputPath = path.join(TMP_DIR, `${jobId}.${format}`);
@@ -1526,11 +1634,88 @@ app.post('/api/extract-audio', requireAuthApi, requireQuota, upload.single('vide
   }
   command.audioFrequency(48000).audioChannels(2);
 
-  runJob(jobId, command, [inputPath], outputPath, {
+  runJob(jobId, command, cleanupInputPaths, outputPath, {
     userId: req.session.user.id,
     downloadName,
     source: 'audio',
+    inputSize,
+    parentHistoryId,
+    params: { format: req.body.format, bitrate: req.body.bitrate, title: req.body.title },
   });
+}
+
+app.post('/api/extract-audio', requireAuthApi, requireQuota, upload.single('video'), handleExtractAudioRequest);
+
+// Reprocesar: vuelve a correr la MISMA herramienta con los MISMOS parametros
+// que se usaron para generar un resultado guardado (item.params), tomando
+// como entrada ese mismo resultado (no hace falta volver a subir nada). No
+// duplica la logica de cada herramienta: llama directo al mismo handler que
+// usa la ruta HTTP normal, así cualquier cambio futuro en una herramienta
+// aplica igual aca sin tener que tocar dos lugares.
+const REPROCESS_HANDLERS = {
+  optimizer: handleOptimizeRequest,
+  speed: handleSpeedRequest,
+  gif: handleGifRequest,
+  audio: handleExtractAudioRequest,
+};
+
+app.post('/api/history/:id/reprocess', requireAuthApi, requireQuota, async (req, res) => {
+  try {
+    const item = await getHistoryItem(req.params.id, req.session.user.id);
+    if (!item) return res.status(404).json({ error: 'No se encontró ese resultado.' });
+    if (!item.params) {
+      return res.status(400).json({ error: 'Este resultado no guardó una configuración (es de antes de esta función), no se puede reprocesar.' });
+    }
+    if (!item.file_path || !fs.existsSync(item.file_path)) {
+      return res.status(400).json({ error: 'El archivo ya venció o se borró, no se puede reprocesar.' });
+    }
+    const handler = REPROCESS_HANDLERS[item.source];
+    if (!handler) return res.status(400).json({ error: 'Esta herramienta todavía no admite reprocesar.' });
+    req.body = { ...item.params, sourceHistoryId: item.id };
+    await handler(req, res);
+  } catch (err) {
+    console.error('[history-reprocess]', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'No se pudo reprocesar.' });
+  }
+});
+
+// ---- Presets personales (configuraciones guardadas por herramienta) ----
+app.get('/api/presets', requireAuthApi, async (req, res) => {
+  try {
+    const presets = await getUserPresets(req.session.user.id, req.query.tool);
+    res.json({ presets });
+  } catch (err) {
+    console.error('[presets-list]', err.message);
+    res.status(500).json({ error: 'No se pudieron cargar los presets.' });
+  }
+});
+
+app.post('/api/presets', requireAuthApi, async (req, res) => {
+  try {
+    const tool = String(req.body.tool || '').trim();
+    const name = String(req.body.name || '').trim().slice(0, 60);
+    const params = req.body.params;
+    if (!tool || !name || !params || typeof params !== 'object') {
+      return res.status(400).json({ error: 'Faltan datos para guardar el preset.' });
+    }
+    if (!TOOLS.some((t) => t.key === tool)) return res.status(400).json({ error: 'Herramienta no reconocida.' });
+    const preset = await createPreset(req.session.user.id, { tool, name, params });
+    res.json({ ok: true, preset });
+  } catch (err) {
+    console.error('[presets-create]', err.message);
+    res.status(500).json({ error: 'No se pudo guardar el preset.' });
+  }
+});
+
+app.delete('/api/presets/:id', requireAuthApi, async (req, res) => {
+  try {
+    const ok = await deletePreset(parseInt(req.params.id, 10), req.session.user.id);
+    if (!ok) return res.status(404).json({ error: 'No se encontró ese preset.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[presets-delete]', err.message);
+    res.status(500).json({ error: 'No se pudo eliminar el preset.' });
+  }
 });
 
 app.get('/api/status/:jobId', requireAuthApi, (req, res) => {

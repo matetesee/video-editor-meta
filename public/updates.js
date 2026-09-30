@@ -5,6 +5,20 @@
 const UPDATES = [
   {
     type: 'feature',
+    date: '2026-09-30',
+    title: 'Historial: fijar, renombrar, duplicar y reprocesar',
+    description: 'Ahora podés fijar un resultado para que no venza a las 24hs, renombrarlo, duplicarlo (queda una copia independiente) y reprocesarlo con la misma configuración que usaste la primera vez, sin tener que volver a subir el archivo.',
+    tags: ['Historial'],
+  },
+  {
+    type: 'feature',
+    date: '2026-09-30',
+    title: 'Presets en el Optimizador Meta',
+    description: 'Guardá tus combinaciones favoritas de formato, códec de audio y calidad como un preset con nombre propio, y aplicalas en un click la próxima vez.',
+    tags: ['Optimizador Meta'],
+  },
+  {
+    type: 'feature',
     date: '2026-09-25',
     title: 'Inicio rediseñado: estadísticas, favoritos y trabajo reciente',
     description: 'La pantalla de Inicio ahora es un dashboard de verdad: saludo, tus números reales, tus últimos archivos para retomar, tus herramientas favoritas y un buscador para encontrar cualquier función al toque.',

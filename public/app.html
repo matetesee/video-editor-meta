@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor de Video de Dematiu Para Meta</title>
 <link rel="stylesheet" href="style.css">
-<script src="theme.js?v=5"></script>
+<script src="theme.js?v=6"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -258,6 +258,15 @@
             <option value="none">Manual (mantener proporción original)</option>
           </select>
           <p class="meta-hint" id="metaHint">Se ajusta automáticamente a la resolución, códec y bitrate que pide Meta para que no lo rechace ni lo marque como "no se entregará en esta ubicación". El contenido se centra sobre un fondo relleno, sin recortarlo.</p>
+        </div>
+
+        <p class="section-label">Presets guardados</p>
+        <div class="panel meta-panel preset-bar">
+          <select id="optimizerPresetSelect">
+            <option value="">Sin preset (ajustar manualmente)</option>
+          </select>
+          <button type="button" id="optimizerPresetSaveBtn" class="btn-secondary">💾 Guardar ajustes actuales como preset</button>
+          <button type="button" id="optimizerPresetDeleteBtn" class="btn-danger hidden">🗑️ Eliminar preset</button>
         </div>
 
         <p class="section-label">2. Ajustes</p>
@@ -803,7 +812,7 @@
     <footer class="fun-footer">
       Hecho con 🧉 por el equipo de Dematiu ·
       <a href="https://instagram.com/mate.tesei" target="_blank" rel="noopener">📸 @mate.tesei</a>
-      <span style="opacity:0.4;">· build 2026-09-25.5</span>
+      <span style="opacity:0.4;">· build 2026-09-30.1</span>
     </footer>
     </div>
     </div>
@@ -927,18 +936,18 @@
     </div>
   </div>
 
-  <script src="fun.js?v=5"></script>
-  <script src="personalization.js?v=5"></script>
-  <script src="progress.js?v=5"></script>
-  <script src="script.js?v=5"></script>
-  <script src="editor.js?v=5"></script>
-  <script src="audio.js?v=5"></script>
-  <script src="gif.js?v=5"></script>
-  <script src="speed.js?v=5"></script>
-  <script src="updates.js?v=5"></script>
-  <script src="home.js?v=5"></script>
-  <script src="snake.js?v=5"></script>
-  <script src="dino.js?v=5"></script>
-  <script src="spotlight.js?v=5"></script>
+  <script src="fun.js?v=6"></script>
+  <script src="personalization.js?v=6"></script>
+  <script src="progress.js?v=6"></script>
+  <script src="script.js?v=6"></script>
+  <script src="editor.js?v=6"></script>
+  <script src="audio.js?v=6"></script>
+  <script src="gif.js?v=6"></script>
+  <script src="speed.js?v=6"></script>
+  <script src="updates.js?v=6"></script>
+  <script src="home.js?v=6"></script>
+  <script src="snake.js?v=6"></script>
+  <script src="dino.js?v=6"></script>
+  <script src="spotlight.js?v=6"></script>
 </body>
 </html>
