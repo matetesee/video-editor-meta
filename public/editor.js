@@ -829,6 +829,14 @@ function pollEditorStatus(jobId) {
         if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
         if (window.showRecordToasts) window.showRecordToasts(data.newRecords);
         if (window.showPersonalizationToasts) window.showPersonalizationToasts(data.newPersonalizations);
+        if (window.renderQuickActions) {
+          window.renderQuickActions(document.getElementById('editorQuickActions'), {
+            currentTool: 'editor',
+            downloadUrl: `/api/download/${jobId}`,
+            title: 'video-editado.mp4',
+            mimeType: 'video/mp4',
+          });
+        }
       } else if (data.status === 'cancelled') {
         stopEditorTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();

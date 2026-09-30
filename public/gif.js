@@ -251,6 +251,15 @@ function pollGifStatus(jobId) {
         if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
         if (window.showRecordToasts) window.showRecordToasts(data.newRecords);
         if (window.showPersonalizationToasts) window.showPersonalizationToasts(data.newPersonalizations);
+        if (window.renderQuickActions) {
+          window.renderQuickActions(document.getElementById('gifQuickActions'), {
+            currentTool: 'gif',
+            downloadUrl: `/api/download/${jobId}`,
+            title: 'animacion.gif',
+            mimeType: 'image/gif',
+            excludeTargets: ['audio'],
+          });
+        }
       } else if (data.status === 'cancelled') {
         stopGifTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();

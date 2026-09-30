@@ -6,6 +6,20 @@ const UPDATES = [
   {
     type: 'feature',
     date: '2026-09-30',
+    title: 'Historial con cuadrícula, búsqueda, filtros y preview',
+    description: 'Elegí vista lista o cuadrícula, buscá por nombre, filtrá por herramienta y ordená por fecha o tamaño. En la cuadrícula, pasá el mouse sobre un video para verlo unos segundos antes de descargarlo.',
+    tags: ['Historial'],
+  },
+  {
+    type: 'feature',
+    date: '2026-09-30',
+    title: '¿Qué querés hacer ahora? (Quick Actions)',
+    description: 'Al terminar de procesar un video, ahora te ofrecemos seguir con otra herramienta (crear un GIF, cambiar la velocidad, extraer el audio, abrir en el Mini Editor) sin tener que volver a subir el archivo.',
+    tags: ['Optimizador Meta', 'Velocidad', 'GIF Maker', 'Mini Editor'],
+  },
+  {
+    type: 'feature',
+    date: '2026-09-30',
     title: 'Historial: fijar, renombrar, duplicar y reprocesar',
     description: 'Ahora podés fijar un resultado para que no venza a las 24hs, renombrarlo, duplicarlo (queda una copia independiente) y reprocesarlo con la misma configuración que usaste la primera vez, sin tener que volver a subir el archivo.',
     tags: ['Historial'],

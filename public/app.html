@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editor de Video de Dematiu Para Meta</title>
 <link rel="stylesheet" href="style.css">
-<script src="theme.js?v=6"></script>
+<script src="theme.js?v=7"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -330,6 +330,7 @@
           <p>✅ ¡Listo! Tu video quedó procesado y optimizado.</p>
           <p class="result-meta" id="resultMeta"></p>
           <a id="downloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+          <div class="quick-actions-box" id="optimizerQuickActions"></div>
           <div class="feedback-card hidden" id="feedbackCard"></div>
         </div>
 
@@ -443,6 +444,7 @@
             <p>✅ ¡Listo! Tu video quedó exportado.</p>
             <p class="result-meta" id="editorResultMeta"></p>
             <a id="editorDownloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+            <div class="quick-actions-box" id="editorQuickActions"></div>
             <div class="feedback-card hidden" id="editorFeedbackCard"></div>
           </div>
 
@@ -567,6 +569,7 @@
             <p>✅ ¡Listo! Ya tenés tu video.</p>
             <p class="result-meta" id="speedResultMeta"></p>
             <a id="speedDownloadLink" class="btn-primary" download>⬇️ Descargar video</a>
+            <div class="quick-actions-box" id="speedQuickActions"></div>
             <div class="feedback-card hidden" id="speedFeedbackCard"></div>
           </div>
 
@@ -655,6 +658,7 @@
             <img id="gifResultPreview" alt="GIF resultado" style="max-width:100%; border-radius:12px; margin-bottom:10px;">
             <p class="result-meta" id="gifResultMeta"></p>
             <a id="gifDownloadLink" class="btn-primary" download>⬇️ Descargar GIF</a>
+            <div class="quick-actions-box" id="gifQuickActions"></div>
             <div class="feedback-card hidden" id="gifFeedbackCard"></div>
           </div>
 
@@ -664,9 +668,31 @@
 
       <div id="historySection" class="hidden">
         <section class="panel">
-          <p class="meta-hint" style="margin-top:0;">Tus videos procesados quedan disponibles para volver a descargar durante 24 horas.</p>
+          <p class="meta-hint" style="margin-top:0;">Tus videos procesados quedan disponibles para volver a descargar durante 24 horas (los que fijás, no vencen).</p>
+          <div class="history-toolbar">
+            <input type="text" id="historySearchInput" placeholder="🔍 Buscar por nombre...">
+            <select id="historyToolFilter">
+              <option value="">Todas las herramientas</option>
+              <option value="optimizer">Optimizador</option>
+              <option value="editor">Mini Editor</option>
+              <option value="audio">Extraer Audio</option>
+              <option value="gif">GIF Maker</option>
+              <option value="speed">Velocidad</option>
+            </select>
+            <select id="historySortSelect">
+              <option value="recent">Más reciente</option>
+              <option value="oldest">Más antiguo</option>
+              <option value="largest">Más pesado</option>
+              <option value="smallest">Más liviano</option>
+            </select>
+            <div class="history-view-toggle">
+              <button type="button" class="icon-btn active" id="historyViewList" title="Vista lista">☰</button>
+              <button type="button" class="icon-btn" id="historyViewGrid" title="Vista cuadrícula">▦</button>
+            </div>
+          </div>
           <div id="historyList"></div>
           <p class="empty-hint hidden" id="historyEmpty">Todavía no procesaste ningún video.</p>
+          <p class="empty-hint hidden" id="historyNoMatches">Ningún resultado coincide con la búsqueda/filtro.</p>
         </section>
       </div>
 
@@ -812,7 +838,7 @@
     <footer class="fun-footer">
       Hecho con 🧉 por el equipo de Dematiu ·
       <a href="https://instagram.com/mate.tesei" target="_blank" rel="noopener">📸 @mate.tesei</a>
-      <span style="opacity:0.4;">· build 2026-09-30.1</span>
+      <span style="opacity:0.4;">· build 2026-09-30.2</span>
     </footer>
     </div>
     </div>
@@ -936,18 +962,18 @@
     </div>
   </div>
 
-  <script src="fun.js?v=6"></script>
-  <script src="personalization.js?v=6"></script>
-  <script src="progress.js?v=6"></script>
-  <script src="script.js?v=6"></script>
-  <script src="editor.js?v=6"></script>
-  <script src="audio.js?v=6"></script>
-  <script src="gif.js?v=6"></script>
-  <script src="speed.js?v=6"></script>
-  <script src="updates.js?v=6"></script>
-  <script src="home.js?v=6"></script>
-  <script src="snake.js?v=6"></script>
-  <script src="dino.js?v=6"></script>
-  <script src="spotlight.js?v=6"></script>
+  <script src="fun.js?v=7"></script>
+  <script src="personalization.js?v=7"></script>
+  <script src="progress.js?v=7"></script>
+  <script src="script.js?v=7"></script>
+  <script src="editor.js?v=7"></script>
+  <script src="audio.js?v=7"></script>
+  <script src="gif.js?v=7"></script>
+  <script src="speed.js?v=7"></script>
+  <script src="updates.js?v=7"></script>
+  <script src="home.js?v=7"></script>
+  <script src="snake.js?v=7"></script>
+  <script src="dino.js?v=7"></script>
+  <script src="spotlight.js?v=7"></script>
 </body>
 </html>

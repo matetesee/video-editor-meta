@@ -310,3 +310,64 @@ window.applyAvatarPersonalization = function applyAvatarPersonalization(personal
     }
   }
 };
+
+// ---- Quick Actions: "¿Qué querés hacer ahora?" al terminar un proceso ----
+// Compartido por las 5 herramientas (script.js, editor.js, audio.js, gif.js,
+// speed.js): reusa el archivo ya guardado en el Historial (via
+// /api/history/:id/download) en vez de obligar al usuario a volver a
+// elegirlo, envolviendolo en un File/Blob del lado del cliente y pasandoselo
+// directo a la funcion de carga que ya tiene cada herramienta
+// (loadFile/loadGifFile/loadSpeedFile/loadAudioFile/addFiles) — la misma
+// que ya usa Quick Drop en Inicio (home.js).
+const QUICK_ACTION_TARGETS = [
+  { tool: 'optimizer', section: 'optimizerSection', label: '🎯 Optimizar para Meta', loaderName: 'loadFile' },
+  { tool: 'gif', section: 'gifSection', label: '🖼️ Crear GIF', loaderName: 'loadGifFile' },
+  { tool: 'speed', section: 'speedSection', label: '⚡ Cambiar velocidad', loaderName: 'loadSpeedFile' },
+  { tool: 'audio', section: 'audioSection', label: '🎧 Extraer audio', loaderName: 'loadAudioFile' },
+  { tool: 'editor', section: 'editorSection', label: '✂️ Abrir en Mini Editor', loaderName: 'addFiles', wrapArray: true },
+];
+
+// container: donde inyectar los botones. opts = { historyId, currentTool,
+// downloadUrl, title, mimeType, excludeTargets }. currentTool se excluye de
+// las opciones (no tiene sentido "optimizar para Meta" el resultado que ya es
+// de Optimizador); excludeTargets es para sacar ademas herramientas que
+// predeciblemente van a fallar con este tipo de archivo (ej: "Extraer audio"
+// sobre un GIF, que nunca tiene pista de audio).
+window.renderQuickActions = function renderQuickActions(container, opts) {
+  if (!container || !opts || !opts.downloadUrl) return;
+  const excluded = new Set([opts.currentTool, ...(opts.excludeTargets || [])]);
+  const targets = QUICK_ACTION_TARGETS.filter((t) => !excluded.has(t.tool));
+  if (targets.length === 0) return;
+  container.innerHTML = `
+    <p class="quick-actions-label">¿Qué querés hacer ahora?</p>
+    <div class="quick-actions-row"></div>
+  `;
+  const row = container.querySelector('.quick-actions-row');
+  targets.forEach((t) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-secondary quick-action-btn';
+    btn.textContent = t.label;
+    btn.addEventListener('click', async () => {
+      const loader = window[t.loaderName];
+      if (!loader) return;
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = 'Cargando…';
+      try {
+        const res = await fetch(opts.downloadUrl);
+        if (!res.ok) throw new Error('El archivo ya no está disponible.');
+        const blob = await res.blob();
+        const file = new File([blob], opts.title || 'archivo', { type: opts.mimeType || blob.type });
+        loader(t.wrapArray ? [file] : file);
+        goToSection(t.section);
+      } catch (err) {
+        if (window.showToast) window.showToast('❌ Error', err.message || 'No se pudo cargar el archivo.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+    row.appendChild(btn);
+  });
+};

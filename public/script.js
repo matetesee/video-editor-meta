@@ -556,6 +556,14 @@ function pollStatus(jobId) {
         if (window.showAchievementModal) window.showAchievementModal(data.newAchievements, data.newReward);
         if (window.showRecordToasts) window.showRecordToasts(data.newRecords);
         if (window.showPersonalizationToasts) window.showPersonalizationToasts(data.newPersonalizations);
+        if (window.renderQuickActions) {
+          window.renderQuickActions(document.getElementById('optimizerQuickActions'), {
+            currentTool: 'optimizer',
+            downloadUrl: `/api/download/${jobId}`,
+            title: 'video-optimizado.mp4',
+            mimeType: 'video/mp4',
+          });
+        }
       } else if (data.status === 'cancelled') {
         stopTimers();
         if (window.stopPhraseRotation) window.stopPhraseRotation();
@@ -649,6 +657,35 @@ const HISTORY_SOURCE_LABELS = {
   speed: 'Velocidad',
   gif: 'GIF Maker',
 };
+const HISTORY_SOURCE_ICONS = {
+  optimizer: '🎯',
+  editor: '✂️',
+  audio: '🎧',
+  speed: '⚡',
+  gif: '🖼️',
+};
+// Herramientas cuyo resultado es un video real (se puede reproducir en un
+// <video> para el preview al hover); GIF se previsualiza distinto (como
+// imagen, ya animada sola) y Audio no tiene nada visual que mostrar.
+const HISTORY_VIDEO_SOURCES = new Set(['optimizer', 'editor', 'speed']);
+// En touch no hay "hover" real (el primer toque ya es un click) — se
+// mantiene el thumbnail estatico para no gastar datos/batería sin sentido.
+const supportsHoverPreview = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+
+const historySearchInput = document.getElementById('historySearchInput');
+const historyToolFilter = document.getElementById('historyToolFilter');
+const historySortSelect = document.getElementById('historySortSelect');
+const historyViewListBtn = document.getElementById('historyViewList');
+const historyViewGridBtn = document.getElementById('historyViewGrid');
+const historyNoMatches = document.getElementById('historyNoMatches');
+let historyItemsCache = [];
+
+function getHistoryViewMode() {
+  try { return localStorage.getItem('historyViewMode') || 'list'; } catch { return 'list'; }
+}
+function setHistoryViewMode(mode) {
+  try { localStorage.setItem('historyViewMode', mode); } catch {}
+}
 
 // Espera a que un job terminado por "Reprocesar" (lanzado sin que el usuario
 // vea la pantalla de esa herramienta) esté listo, reusando el mismo
@@ -673,116 +710,237 @@ function pollReprocessJob(jobId) {
   }, 1000);
 }
 
-window.loadHistory = async function loadHistory() {
-  historyList.innerHTML = '<p class="empty-hint">Cargando...</p>';
-  historyEmpty.classList.add('hidden');
-  try {
-    const res = await fetch('/api/history');
-    if (res.status === 401) return (window.location.href = '/login');
-    const items = await res.json();
-    historyList.innerHTML = '';
-    if (!items.length) {
-      historyEmpty.classList.remove('hidden');
-      return;
-    }
-    items.forEach((item) => {
-      const row = document.createElement('div');
-      row.className = 'history-row' + (item.available ? '' : ' expired') + (item.pinned ? ' pinned' : '');
-      const sourceLabel = HISTORY_SOURCE_LABELS[item.source] || 'Optimizador';
-      row.innerHTML = `
-        <div class="history-info">
-          <div class="history-title" data-title>${item.pinned ? '📌 ' : ''}${item.title}</div>
-          <div class="history-meta">${sourceLabel} · ${formatBytes(item.output_size)} · ${formatHistoryDate(item.created_at)}</div>
-        </div>
-        <div class="history-actions">
-          <button type="button" class="icon-btn pin-btn" title="${item.pinned ? 'Desfijar' : 'Fijar (no vence)'}">${item.pinned ? '📍' : '📌'}</button>
-          <button type="button" class="icon-btn rename-btn" title="Renombrar">✏️</button>
-          ${item.available ? `<button type="button" class="icon-btn duplicate-btn" title="Duplicar">📄</button>` : ''}
-          ${item.available && item.has_params ? `<button type="button" class="icon-btn reprocess-btn" title="Reprocesar con esta configuración">🔁</button>` : ''}
-          <button type="button" class="btn-primary download-btn" data-id="${item.id}">⬇️ Descargar</button>
-        </div>
-      `;
-      row.querySelector('.download-btn').addEventListener('click', () => {
-        window.location.href = `/api/history/${item.id}/download`;
+// Conecta los botones de accion (pin/renombrar/duplicar/reprocesar/descargar)
+// que existen IGUAL en la tarjeta de grilla y en la fila de lista — el
+// markup interno cambia, pero los selectores de clase son los mismos.
+function wireHistoryItemActions(item, root) {
+  root.querySelector('.download-btn').addEventListener('click', () => {
+    window.location.href = `/api/history/${item.id}/download`;
+  });
+  root.querySelector('.pin-btn').addEventListener('click', async () => {
+    try {
+      await fetch(`/api/history/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: !item.pinned }),
       });
-      row.querySelector('.pin-btn').addEventListener('click', async () => {
+      window.loadHistory();
+    } catch {
+      if (window.showToast) window.showToast('❌ Error', 'No se pudo fijar.');
+    }
+  });
+  root.querySelector('.rename-btn').addEventListener('click', () => {
+    const titleEl = root.querySelector('[data-title]');
+    const currentText = item.title;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'history-title-input';
+    input.value = currentText;
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+    const save = async () => {
+      const newTitle = input.value.trim();
+      if (newTitle && newTitle !== currentText) {
         try {
           await fetch(`/api/history/${item.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pinned: !item.pinned }),
+            body: JSON.stringify({ title: newTitle }),
           });
-          window.loadHistory();
         } catch {
-          if (window.showToast) window.showToast('❌ Error', 'No se pudo fijar.');
+          if (window.showToast) window.showToast('❌ Error', 'No se pudo renombrar.');
         }
-      });
-      row.querySelector('.rename-btn').addEventListener('click', () => {
-        const titleEl = row.querySelector('[data-title]');
-        const currentText = item.title;
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'history-title-input';
-        input.value = currentText;
-        titleEl.replaceWith(input);
-        input.focus();
-        input.select();
-        const save = async () => {
-          const newTitle = input.value.trim();
-          if (newTitle && newTitle !== currentText) {
-            try {
-              await fetch(`/api/history/${item.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: newTitle }),
-              });
-            } catch {
-              if (window.showToast) window.showToast('❌ Error', 'No se pudo renombrar.');
-            }
-          }
-          window.loadHistory();
-        };
-        input.addEventListener('blur', save);
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') input.blur();
-          if (e.key === 'Escape') { input.removeEventListener('blur', save); window.loadHistory(); }
-        });
-      });
-      const duplicateBtn = row.querySelector('.duplicate-btn');
-      if (duplicateBtn) {
-        duplicateBtn.addEventListener('click', async () => {
-          duplicateBtn.disabled = true;
-          try {
-            const r = await fetch(`/api/history/${item.id}/duplicate`, { method: 'POST' });
-            const d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'No se pudo duplicar.');
-            if (window.showToast) window.showToast('✅ Duplicado', 'Se creó una copia independiente.');
-            window.loadHistory();
-          } catch (err) {
-            if (window.showToast) window.showToast('❌ Error', err.message);
-            duplicateBtn.disabled = false;
-          }
-        });
       }
-      const reprocessBtn = row.querySelector('.reprocess-btn');
-      if (reprocessBtn) {
-        reprocessBtn.addEventListener('click', async () => {
-          reprocessBtn.disabled = true;
-          try {
-            const r = await fetch(`/api/history/${item.id}/reprocess`, { method: 'POST' });
-            const d = await r.json();
-            if (!r.ok) throw new Error(d.error || 'No se pudo reprocesar.');
-            if (window.showToast) window.showToast('⏳ Reprocesando…', 'Te avisamos cuando esté listo.');
-            pollReprocessJob(d.jobId);
-          } catch (err) {
-            if (window.showToast) window.showToast('❌ Error', err.message);
-          } finally {
-            reprocessBtn.disabled = false;
-          }
-        });
-      }
-      historyList.appendChild(row);
+      window.loadHistory();
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.removeEventListener('blur', save); window.loadHistory(); }
     });
+  });
+  const duplicateBtn = root.querySelector('.duplicate-btn');
+  if (duplicateBtn) {
+    duplicateBtn.addEventListener('click', async () => {
+      duplicateBtn.disabled = true;
+      try {
+        const r = await fetch(`/api/history/${item.id}/duplicate`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'No se pudo duplicar.');
+        if (window.showToast) window.showToast('✅ Duplicado', 'Se creó una copia independiente.');
+        window.loadHistory();
+      } catch (err) {
+        if (window.showToast) window.showToast('❌ Error', err.message);
+        duplicateBtn.disabled = false;
+      }
+    });
+  }
+  const reprocessBtn = root.querySelector('.reprocess-btn');
+  if (reprocessBtn) {
+    reprocessBtn.addEventListener('click', async () => {
+      reprocessBtn.disabled = true;
+      try {
+        const r = await fetch(`/api/history/${item.id}/reprocess`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'No se pudo reprocesar.');
+        if (window.showToast) window.showToast('⏳ Reprocesando…', 'Te avisamos cuando esté listo.');
+        pollReprocessJob(d.jobId);
+      } catch (err) {
+        if (window.showToast) window.showToast('❌ Error', err.message);
+      } finally {
+        reprocessBtn.disabled = false;
+      }
+    });
+  }
+}
+
+function historyActionButtonsHtml(item) {
+  return `
+    <button type="button" class="icon-btn pin-btn" title="${item.pinned ? 'Desfijar' : 'Fijar (no vence)'}">${item.pinned ? '📍' : '📌'}</button>
+    <button type="button" class="icon-btn rename-btn" title="Renombrar">✏️</button>
+    ${item.available ? `<button type="button" class="icon-btn duplicate-btn" title="Duplicar">📄</button>` : ''}
+    ${item.available && item.has_params ? `<button type="button" class="icon-btn reprocess-btn" title="Reprocesar con esta configuración">🔁</button>` : ''}
+    <button type="button" class="btn-primary download-btn" data-id="${item.id}">⬇️ Descargar</button>
+  `;
+}
+
+function renderHistoryRow(item) {
+  const row = document.createElement('div');
+  row.className = 'history-row' + (item.available ? '' : ' expired') + (item.pinned ? ' pinned' : '');
+  const sourceLabel = HISTORY_SOURCE_LABELS[item.source] || 'Optimizador';
+  row.innerHTML = `
+    <div class="history-info">
+      <div class="history-title" data-title>${item.pinned ? '📌 ' : ''}${item.title}</div>
+      <div class="history-meta">${sourceLabel} · ${formatBytes(item.output_size)} · ${formatHistoryDate(item.created_at)}</div>
+    </div>
+    <div class="history-actions">${historyActionButtonsHtml(item)}</div>
+  `;
+  wireHistoryItemActions(item, row);
+  return row;
+}
+
+// El preview de video solo se "engancha" al pasar el mouse (hover) y se
+// desengancha al salir: asi una grilla con muchos resultados no arranca 20
+// videos a la vez, solo el que el usuario esta mirando en ese momento.
+function wireHoverPreview(thumbWrap, item) {
+  if (!item.available) return;
+  if (item.source === 'gif') {
+    const img = document.createElement('img');
+    img.className = 'history-thumb-media';
+    img.loading = 'lazy';
+    img.src = `/api/history/${item.id}/download`;
+    thumbWrap.appendChild(img);
+    return;
+  }
+  if (!supportsHoverPreview || !HISTORY_VIDEO_SOURCES.has(item.source)) return;
+  // El <video> se crea/destruye recien al entrar/salir con el mouse (no
+  // queda un elemento vacio tapando el icono todo el tiempo, y no arranca a
+  // bajar bytes del video hasta que realmente hace falta mostrarlo).
+  let video = null;
+  thumbWrap.addEventListener('mouseenter', () => {
+    if (video) return;
+    video = document.createElement('video');
+    video.className = 'history-thumb-media';
+    video.muted = true;
+    video.loop = true;
+    video.src = `/api/history/${item.id}/download`;
+    thumbWrap.appendChild(video);
+    video.play().catch(() => {});
+  });
+  thumbWrap.addEventListener('mouseleave', () => {
+    if (!video) return;
+    video.pause();
+    video.remove();
+    video = null;
+  });
+}
+
+function renderHistoryCard(item) {
+  const card = document.createElement('div');
+  card.className = 'history-card' + (item.available ? '' : ' expired') + (item.pinned ? ' pinned' : '');
+  const sourceLabel = HISTORY_SOURCE_LABELS[item.source] || 'Optimizador';
+  card.innerHTML = `
+    <div class="history-thumb-wrap">
+      <span class="history-thumb-icon">${HISTORY_SOURCE_ICONS[item.source] || '🎬'}</span>
+      ${item.pinned ? '<span class="history-pin-badge">📌</span>' : ''}
+    </div>
+    <div class="history-card-body">
+      <div class="history-title" data-title>${item.title}</div>
+      <div class="history-meta">${sourceLabel} · ${formatBytes(item.output_size)} · ${formatHistoryDate(item.created_at)}</div>
+    </div>
+    <div class="history-actions">${historyActionButtonsHtml(item)}</div>
+  `;
+  wireHoverPreview(card.querySelector('.history-thumb-wrap'), item);
+  wireHistoryItemActions(item, card);
+  return card;
+}
+
+function getFilteredSortedHistory() {
+  const q = historySearchInput.value.trim().toLowerCase();
+  const tool = historyToolFilter.value;
+  const sort = historySortSelect.value;
+  let list = historyItemsCache.filter((item) => {
+    if (tool && item.source !== tool) return false;
+    if (q && !item.title.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  list.sort((a, b) => {
+    if (sort === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
+    if (sort === 'largest') return b.output_size - a.output_size;
+    if (sort === 'smallest') return a.output_size - b.output_size;
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+  // Segundo sort (estable en JS moderno): agrupa los fijados arriba sin
+  // perder el orden que ya se eligio dentro de cada grupo.
+  list.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  return list;
+}
+
+function renderHistoryList() {
+  const mode = getHistoryViewMode();
+  const list = getFilteredSortedHistory();
+  historyList.innerHTML = '';
+  historyList.className = mode === 'grid' ? 'history-grid' : '';
+  historyNoMatches.classList.toggle('hidden', list.length > 0 || historyItemsCache.length === 0);
+  list.forEach((item) => {
+    historyList.appendChild(mode === 'grid' ? renderHistoryCard(item) : renderHistoryRow(item));
+  });
+}
+
+historyViewListBtn.addEventListener('click', () => {
+  setHistoryViewMode('list');
+  historyViewListBtn.classList.add('active');
+  historyViewGridBtn.classList.remove('active');
+  renderHistoryList();
+});
+historyViewGridBtn.addEventListener('click', () => {
+  setHistoryViewMode('grid');
+  historyViewGridBtn.classList.add('active');
+  historyViewListBtn.classList.remove('active');
+  renderHistoryList();
+});
+historySearchInput.addEventListener('input', renderHistoryList);
+historyToolFilter.addEventListener('change', renderHistoryList);
+historySortSelect.addEventListener('change', renderHistoryList);
+
+window.loadHistory = async function loadHistory() {
+  historyList.innerHTML = '<p class="empty-hint">Cargando...</p>';
+  historyEmpty.classList.add('hidden');
+  historyNoMatches.classList.add('hidden');
+  try {
+    const res = await fetch('/api/history');
+    if (res.status === 401) return (window.location.href = '/login');
+    historyItemsCache = await res.json();
+    const mode = getHistoryViewMode();
+    (mode === 'grid' ? historyViewGridBtn : historyViewListBtn).classList.add('active');
+    (mode === 'grid' ? historyViewListBtn : historyViewGridBtn).classList.remove('active');
+    historyList.innerHTML = '';
+    if (!historyItemsCache.length) {
+      historyEmpty.classList.remove('hidden');
+      return;
+    }
+    renderHistoryList();
   } catch (err) {
     historyList.innerHTML = '';
     historyEmpty.textContent = 'No se pudo cargar el historial.';
